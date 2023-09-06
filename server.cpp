@@ -2,21 +2,8 @@
 #include <string>
 #include <cstring>
 
-#if defined( WIN32 ) || defined( _WIN32 ) || defined( WIN64 ) || defined( _WIN64 )
-#include <windows.h>
-#elif !defined( __unix )
-#define __unix
-#endif
-
-#ifdef __unix
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#else
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#endif
-
 #include "util.h"
+#include "udpsocket.h"
 
 constexpr auto port = 9527;
 constexpr auto BUFFER_SIZE = 1024;
@@ -33,7 +20,6 @@ int main()
         exit( 1 );
     }
     /* 填写sockaddr_in 结构 */
-    memset( &addr, 0, sizeof( addr ) );
     addr.sin_family = AF_INET;
     addr.sin_port = htons( port );
     addr.sin_addr.s_addr = htonl( INADDR_ANY ); // 接收任意IP发来的数据

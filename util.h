@@ -2,6 +2,22 @@
 
 #include "ikcp.h"
 
+#if defined( WIN32 ) || defined( _WIN32 ) || defined( WIN64 ) || defined( _WIN64 )
+#include <windows.h>
+#elif !defined( __unix )
+#define __unix
+#endif
+
+#ifdef __unix
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <unistd.h>
+#else
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#endif
+
 #include <chrono>
 #include <thread>
 

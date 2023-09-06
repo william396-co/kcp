@@ -2,21 +2,8 @@
 #include <string>
 #include <cstring>
 
-#if defined( WIN32 ) || defined( _WIN32 ) || defined( WIN64 ) || defined( _WIN64 )
-#include <windows.h>
-#elif !defined( __unix )
-#define __unix
-#endif
-
-#ifdef __unix
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#else
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#endif
-
 #include "util.h"
+#include "udpsocket.h"
 
 constexpr auto ip = "127.0.0.1";
 constexpr auto port = 9527;
