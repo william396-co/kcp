@@ -22,6 +22,7 @@ public:
     const char * getRecvBuffer() const { return m_recvBuffer; }
     uint32_t getRecvSize() const { return m_recvSize; }
     int setNonblocking( bool isNonblocking = true );
+    void setSocketopt();
 
     const char * getRemoteIp() const { return inet_ntoa( m_remote_addr.sin_addr ); }
     uint16_t getRemotePort() const { return ntohs( m_remote_addr.sin_port ); }

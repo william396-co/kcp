@@ -19,13 +19,7 @@ bool UdpSocket::server_bind( uint16_t port )
     m_local_addr.sin_port = htons( port );
     m_local_addr.sin_addr.s_addr = htonl( INADDR_ANY ); // 接收任意IP发来的数据
 
-#ifdef __unix
-    int flag = 1;
-    setsockopt( m_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flag, sizeof( flag ) );
-    flag = 1;
-    setsockopt( m_fd, SOL_SOCKET, SO_REUSEPORT, (void *)&flag, sizeof( flag ) );
-#else
-#endif
+    setSocketopt();
 
     if ( ::bind( m_fd, (struct sockaddr *)&m_local_addr, sizeof( m_local_addr ) ) == -1 ) {
         close();
@@ -37,10 +31,15 @@ bool UdpSocket::server_bind( uint16_t port )
 
 bool UdpSocket::client_bind()
 {
-    if ( util::get_local_addr( m_fd, &m_local_addr ) && ::bind( m_fd, (struct sockaddr *)&m_local_addr, sizeof( m_local_addr ) ) != -1 ) {
-        return true;
+
+    setSocketopt();
+    util::get_remote_addr( m_fd, &m_remote_addr );
+    util::get_local_addr( m_fd, &m_local_addr );
+
+    if ( ::bind( m_fd, (struct sockaddr *)&m_local_addr, sizeof( m_local_addr ) ) == -1 ) {
+        return false;
     }
-    return false;
+    return true;
 }
 
 bool UdpSocket::connect( const char * ip, uint16_t port )
@@ -49,6 +48,7 @@ bool UdpSocket::connect( const char * ip, uint16_t port )
     m_remote_addr.sin_port = htons( port );
     m_remote_addr.sin_addr.s_addr = inet_addr( ip );
 
+    setSocketopt();
     int rc = ::connect( m_fd, (struct sockaddr *)&m_remote_addr, sizeof( m_remote_addr ) );
     if ( rc == -1 && errno != EINTR && errno != EINPROGRESS ) { // Ignore EINTR/EINPROGRESS
         close();
@@ -80,6 +80,17 @@ int32_t UdpSocket::recv()
     socklen_t addr_len = sizeof( m_remote_addr );
     m_recvSize = ::recvfrom( m_fd, m_recvBuffer, sizeof( m_recvBuffer ), 0, (struct sockaddr *)&m_remote_addr, &addr_len );
     return m_recvSize;
+}
+
+void UdpSocket::setSocketopt()
+{
+#ifdef __unix
+    int flag = 1;
+    setsockopt( m_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&flag, sizeof( flag ) );
+    flag = 1;
+    setsockopt( m_fd, SOL_SOCKET, SO_REUSEPORT, (void *)&flag, sizeof( flag ) );
+#else
+#endif
 }
 
 int UdpSocket::setNonblocking( bool isNonblocking )
