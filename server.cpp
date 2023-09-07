@@ -1,46 +1,67 @@
+#include "server.h"
+
 #include <iostream>
-#include <string>
-#include <cstring>
+#include <stdexcept>
 
-#include "util.h"
-#include "udpsocket.h"
-
-constexpr auto port = 9527;
-constexpr auto BUFFER_SIZE = 1024;
-
-int main()
+Server::Server( uint16_t port )
+    : listen { nullptr }
 {
-    struct sockaddr_in addr;
-    int listenfd, len = 0;
-    socklen_t addr_len = sizeof( struct sockaddr_in );
-
-    /* 建立socket，注意必须是SOCK_DGRAM */
-    if ( ( listenfd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ) {
-        perror( "socket" );
-        exit( 1 );
+    listen = new UdpSocket();
+    listen->setNonblocking();
+    if ( !listen->server_bind( port ) ) {
+        throw std::runtime_error( "listen socket bind error" );
     }
-    /* 填写sockaddr_in 结构 */
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons( port );
-    addr.sin_addr.s_addr = htonl( INADDR_ANY ); // 接收任意IP发来的数据
-                                                /* 绑定socket */
-    if ( bind( listenfd, (struct sockaddr *)&addr, sizeof( addr ) ) < 0 ) {
-        perror( "connect" );
-        exit( 1 );
-    }
-
-    char readBuffer[BUFFER_SIZE];
-    while ( 1 ) {
-        memset( &readBuffer, 0, sizeof( readBuffer ) );
-        len = recvfrom( listenfd, readBuffer, sizeof( readBuffer ), 0, (struct sockaddr *)&addr, &addr_len );
-        /* 显示client端的网络地址和收到的字符串消息 */
-        printf( "Received a string from client[ %s:%d], string is: %s\n",
-            inet_ntoa( addr.sin_addr ),
-            ntohs( addr.sin_port ),
-            readBuffer );
-        /* 将收到的字符串消息返回给client端 */
-        sendto( listenfd, readBuffer, len, 0, (struct sockaddr *)&addr, addr_len );
-    }
-
-    return 0;
 }
+
+Server::~Server()
+{
+    delete listen;
+    for ( auto & it : connections ) {
+        delete it.second;
+    }
+}
+
+UdpSocket * Server::findConn( const char * ip, uint16_t port )
+{
+    auto it = connections.find( std::make_pair( ip, port ) );
+    if ( it != connections.end() ) {
+        return it->second;
+    }
+    std::cout << __FUNCTION__ << "(" << ip << "," << port << ")\n";
+    UdpSocket * conn = new UdpSocket();
+    if ( conn->connect( ip, port ) ) {
+        //        conn->client_bind();
+        connections.emplace( std::make_pair( ip, port ), conn );
+        return conn;
+    }
+    delete conn;
+    return nullptr;
+}
+
+void Server::DoRecv()
+{
+    printf( "Received a string from client [%s:%d] -> [ %s:%d], string is: %s\n",
+        listen->getRemoteIp(),
+        listen->getRemotePort(),
+        listen->getLocalIp(),
+        listen->getLocalPort(),
+        listen->getRecvBuffer() );
+
+    UdpSocket * conn = findConn( listen->getRemoteIp(), listen->getRemotePort() );
+    if ( conn ) {
+        /* 将收到的字符串消息返回给client端 */
+        conn->send( listen->getRecvBuffer(), listen->getRecvSize() );
+    }
+}
+
+void Server::run()
+{
+    while ( true ) {
+        util::isleep( 10 );
+
+        if ( listen->recv() > 0 ) {
+            DoRecv();
+        }
+    }
+}
+

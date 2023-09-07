@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ikcp.h"
+#include <cstdio>
 
 #if defined( WIN32 ) || defined( _WIN32 ) || defined( WIN64 ) || defined( _WIN64 )
 #include <windows.h>
@@ -11,6 +12,7 @@
 #ifdef __unix
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
 #include <fcntl.h>
 #include <unistd.h>
 #else
@@ -58,5 +60,29 @@ inline int iclock()
 inline void isleep( unsigned long millisecond )
 {
     std::this_thread::sleep_for( std::chrono::milliseconds( millisecond ) );
+}
+
+inline bool get_local_addr( int fd, struct sockaddr_in * addr )
+{
+    socklen_t addr_len;
+    if ( getsockname( fd, (struct sockaddr *)addr, &addr_len ) == -1 ) {
+        perror( "getsockname failed" );
+        return false;
+    }
+
+    printf( "fd: %d local addr [%s:%d]\n", fd, inet_ntoa( addr->sin_addr ), ntohs( addr->sin_port ) );
+
+    return true;
+}
+
+inline bool get_remote_addr( int fd, struct sockaddr_in * addr )
+{
+    socklen_t len;
+    if ( getpeername( fd, (struct sockaddr *)addr, &len ) == -1 ) {
+        perror( "getpeername failed" );
+        return false;
+    }
+    printf( "fd:%d remote addr [%s:%d]\n", fd, inet_ntoa( addr->sin_addr ), ntohs( addr->sin_port ) );
+    return true;
 }
 } // namespace util

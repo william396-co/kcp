@@ -10,21 +10,29 @@ public:
     ~UdpSocket();
 
     // server function
-    bool bind( uint16_t port );
+    bool server_bind( uint16_t port );
+
     // client function
     bool connect( const char * ip, uint16_t port );
+    bool client_bind();
 
     void close();
-    int32_t send( const char * bytes, int32_t size );
+    int32_t send( const char * bytes, uint32_t size );
     int32_t recv();
     const char * getRecvBuffer() const { return m_recvBuffer; }
     uint32_t getRecvSize() const { return m_recvSize; }
     int setNonblocking( bool isNonblocking = true );
 
+    const char * getRemoteIp() const { return inet_ntoa( m_remote_addr.sin_addr ); }
+    uint16_t getRemotePort() const { return ntohs( m_remote_addr.sin_port ); }
+
+    const char * getLocalIp() const { return inet_ntoa( m_local_addr.sin_addr ); }
+    uint16_t getLocalPort() const { return ntohs( m_local_addr.sin_port ); }
+
 private:
     int m_fd;
-    struct sockaddr_in m_addr;
-    socklen_t addr_len;
+    struct sockaddr_in m_local_addr;
+    struct sockaddr_in m_remote_addr;
     char m_recvBuffer[RECV_BUF_SIZE];
     uint32_t m_recvSize;
 };
