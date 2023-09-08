@@ -11,7 +11,6 @@
 #include <stdlib.h>
 
 #include "test.h"
-#include "ikcp.c"
 
 #define BUFF_LEN 2000
 #define TEST_CNT 1000
