@@ -13,7 +13,7 @@ UdpSocket::~UdpSocket()
         close();
 }
 
-bool UdpSocket::server_bind( uint16_t port )
+bool UdpSocket::bind( uint16_t port )
 {
     m_local_addr.sin_family = AF_INET;
     m_local_addr.sin_port = htons( port );
@@ -26,19 +26,6 @@ bool UdpSocket::server_bind( uint16_t port )
         return false;
     }
 
-    return true;
-}
-
-bool UdpSocket::client_bind()
-{
-
-    setSocketopt();
-    util::get_remote_addr( m_fd, &m_remote_addr );
-    util::get_local_addr( m_fd, &m_local_addr );
-
-    if ( ::bind( m_fd, (struct sockaddr *)&m_local_addr, sizeof( m_local_addr ) ) == -1 ) {
-        return false;
-    }
     return true;
 }
 
@@ -71,6 +58,15 @@ void UdpSocket::close()
 int32_t UdpSocket::send( const char * bytes, uint32_t size )
 {
     return sendto( m_fd, bytes, size, 0, (struct sockaddr *)&m_remote_addr, sizeof( m_remote_addr ) );
+}
+
+int32_t UdpSocket::send( const char * bytes, uint32_t size, const char * ip, uint16_t port )
+{
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr( ip );
+    addr.sin_port = htons( port );
+    return sendto( m_fd, bytes, size, 0, (struct sockaddr *)&addr, sizeof( addr ) );
 }
 
 int32_t UdpSocket::recv()

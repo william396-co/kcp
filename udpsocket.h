@@ -10,15 +10,16 @@ public:
     ~UdpSocket();
 
     // server function
-    bool server_bind( uint16_t port );
+    bool bind( uint16_t port );
 
     // client function
     bool connect( const char * ip, uint16_t port );
-    bool client_bind();
 
     void close();
     int32_t send( const char * bytes, uint32_t size );
+    int32_t send( const char * bytes, uint32_t size, const char * ip, uint16_t port );
     int32_t recv();
+
     const char * getRecvBuffer() const { return m_recvBuffer; }
     uint32_t getRecvSize() const { return m_recvSize; }
     int setNonblocking( bool isNonblocking = true );

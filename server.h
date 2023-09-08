@@ -5,7 +5,9 @@
 #include <unordered_map>
 #include <functional>
 #include <string>
+#include <memory>
 
+/*
 using ConnID = std::pair<std::string, uint16_t>;
 
 namespace std {
@@ -23,6 +25,7 @@ struct hash<ConnID>
 } // namespace std
 
 using ConnMap = std::unordered_map<ConnID, UdpSocket *>;
+*/
 
 class Server
 {
@@ -30,15 +33,16 @@ public:
     Server( uint16_t port );
     ~Server();
 
-    UdpSocket * findConn( const char * ip, uint16_t port );
+    //   UdpSocket * findConn( const char * ip, uint16_t port );
 
     void run();
+    void input();
 
 private:
-    void DoRecv();
+    void doRecv();
 
 private:
-    UdpSocket * listen;
-    ConnMap connections;
+    std::unique_ptr<UdpSocket> listen;
+    //    ConnMap connections;
 };
 
