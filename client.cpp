@@ -39,7 +39,7 @@ void Client::input()
         printf( "Please enter a string to send to server(%s:%d):", client->getRemoteIp(), client->getRemotePort() );
 
         writeBuffer.clear();
-        memset( &buff, 0, sizeof( buff ) );
+        bzero( buff, sizeof( buff ) );
         std::getline( std::cin, writeBuffer );
         if ( !writeBuffer.empty() ) {
             ( (IUINT32 *)buff )[0] = g_sn++;
@@ -71,7 +71,7 @@ void Client::run()
         }
         ikcp_input( kcp, client->getRecvBuffer(), client->getRecvSize() );
 
-        memset( &buff, 0, sizeof( buff ) );
+        bzero( buff, sizeof( buff ) );
         // user/logic package received
         int rc = ikcp_recv( kcp, buff, BUFFER_SIZE );
         if ( rc < 0 )

@@ -106,7 +106,7 @@ void Server::run()
         }
         ikcp_input( kcp, listen->getRecvBuffer(), listen->getRecvSize() );
 
-        memset( &buff, 0, sizeof( buff ) );
+        bzero( buff, sizeof( buff ) );
         // user level recv
         int rc = ikcp_recv( kcp, buff, BUFFER_SIZE );
         if ( rc < 0 ) continue;
