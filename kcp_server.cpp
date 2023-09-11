@@ -11,12 +11,19 @@ constexpr auto BUFFER_SIZE = 1024;
 constexpr auto conv = 0x12345;
 constexpr auto suser = 0x100;
 
-int main()
+int main( int argc, char ** argv )
 {
-    std::unique_ptr<Server> server = std::make_unique<Server>( port );
+    int mode = 0;
+    if ( argc >= 2 ) {
+        mode = atoi( argv[1] );
+    }
+    std::unique_ptr<Server> server = std::make_unique<Server>( port, conv );
+
+    util::ikcp_set_mode( server->getKcp(), mode );
+    //    util::ikcp_set_log(IKCP_LOG_INPUT|IKCP_LOG_OUTPUT);
 
     joining_thread work( &Server::run, server.get() );
     joining_thread input( &Server::input, server.get() );
-    
+
     return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "util.h"
 #include "udpsocket.h"
+#include "ikcp.h"
 
 #include <unordered_map>
 #include <functional>
@@ -30,7 +31,7 @@ using ConnMap = std::unordered_map<ConnID, UdpSocket *>;
 class Server
 {
 public:
-    Server( uint16_t port );
+    Server( uint16_t port, uint32_t conv );
     ~Server();
 
     //   UdpSocket * findConn( const char * ip, uint16_t port );
@@ -38,11 +39,14 @@ public:
     void run();
     void input();
 
+    ikcpcb * getKcp() { return kcp; }
+
 private:
     void doRecv();
 
 private:
     std::unique_ptr<UdpSocket> listen;
     //    ConnMap connections;
+    ikcpcb * kcp;
 };
 

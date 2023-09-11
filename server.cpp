@@ -6,7 +6,15 @@
 #include <iostream>
 #include <stdexcept>
 
-Server::Server( uint16_t port )
+constexpr auto BUFFER_SIZE = 1024 * 8;
+
+int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
+{
+    UdpSocket * s = (UdpSocket *)user;
+    return s->send( buf, len );
+}
+
+Server::Server( uint16_t port, uint32_t conv )
     : listen { nullptr }
 {
     listen = std::make_unique<UdpSocket>();
@@ -14,6 +22,12 @@ Server::Server( uint16_t port )
     if ( !listen->bind( port ) ) {
         throw std::runtime_error( "listen socket bind error" );
     }
+
+    kcp = ikcp_create( conv, listen.get() );
+    ikcp_setoutput( kcp, kcp_output );
+
+    ikcp_wndsize( kcp, 128, 128 );
+    ikcp_nodelay( kcp, 0, 10, 0, 0 );
 }
 
 Server::~Server()
@@ -21,6 +35,8 @@ Server::~Server()
     /*  for ( auto & it : connections ) {
           delete it.second;
       }*/
+
+    ikcp_release( kcp );
 }
 
 /*
@@ -55,7 +71,7 @@ void Server::doRecv()
 
 void Server::input()
 {
-    return;
+    return; // TODO
 
     std::string writeBuffer;
     char ip[512];
@@ -79,12 +95,37 @@ void Server::input()
 
 void Server::run()
 {
+    char buff[BUFFER_SIZE];
     while ( true ) {
-        util::isleep( 10 );
+        util::isleep( 1 );
+        ikcp_update( kcp, util::iclock() );
 
-        if ( listen->recv() > 0 ) {
-            doRecv();
+        // lower level recv
+        if ( listen->recv() <= 0 ) {
+            continue;
         }
+        ikcp_input( kcp, listen->getRecvBuffer(), listen->getRecvSize() );
+
+        memset( &buff, 0, sizeof( buff ) );
+        // user level recv
+        int rc = ikcp_recv( kcp, buff, BUFFER_SIZE );
+        if ( rc < 0 ) continue;
+
+        IUINT32 sn = *(IUINT32 *)( buff );
+        //  IUINT32 ts = *(IUINT32 *)( buff + 4 );
+        printf( "Received a string from client [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
+            listen->getRemoteIp(),
+            listen->getRemotePort(),
+            listen->getLocalIp(),
+            listen->getLocalPort(),
+            sn,
+            &buff[8] );
+
+        // send back to client
+        ikcp_send( kcp, buff, rc );
+
+        /*if ( listen->recv() > 0 ) {
+            doRecv();}*/
     }
 }
 

@@ -22,6 +22,8 @@
 
 #include <chrono>
 #include <thread>
+#include <iostream>
+#include <cstdio>
 
 namespace util {
 using namespace std::chrono;
@@ -85,4 +87,11 @@ inline bool get_remote_addr( int fd, struct sockaddr_in * addr )
     printf( "fd:%d remote addr [%s:%d]\n", fd, inet_ntoa( addr->sin_addr ), ntohs( addr->sin_port ) );
     return true;
 }
+
+/* interface about ikcp setting */
+
+void ikcp_set_mode( ikcpcb * kcp, int mode );
+
+void ikcp_set_log( ikcpcb * kcp, int mask );
+
 } // namespace util
