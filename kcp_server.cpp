@@ -11,8 +11,13 @@ constexpr auto BUFFER_SIZE = 1024;
 constexpr auto conv = 0x12345;
 constexpr auto suser = 0x100;
 
+bool is_running = true;
+
 int main( int argc, char ** argv )
 {
+
+    util::handle_signal();
+
     int mode = 0;
     if ( argc >= 2 ) {
         mode = atoi( argv[1] );

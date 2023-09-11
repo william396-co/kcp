@@ -28,6 +28,8 @@ struct hash<ConnID>
 using ConnMap = std::unordered_map<ConnID, UdpSocket *>;
 */
 
+extern bool is_running;
+
 class Server
 {
 public:

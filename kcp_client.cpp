@@ -9,8 +9,12 @@ constexpr auto default_port = 9527;
 
 constexpr auto conv = 0x12345;
 
+bool is_running = true;
+
 int main( int argc, char ** argv )
 {
+    util::handle_signal();
+
     int mode = 0;
     std::string ip = default_ip;
     uint16_t port = default_port;

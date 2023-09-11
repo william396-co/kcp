@@ -7,6 +7,8 @@
 #include "udpsocket.h"
 #include "ikcp.h"
 
+extern bool is_running;
+
 class Client
 {
 public:

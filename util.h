@@ -25,6 +25,8 @@
 #include <iostream>
 #include <cstdio>
 
+extern bool is_running;
+
 namespace util {
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -93,5 +95,7 @@ inline bool get_remote_addr( int fd, struct sockaddr_in * addr )
 void ikcp_set_mode( ikcpcb * kcp, int mode );
 
 void ikcp_set_log( ikcpcb * kcp, int mask );
+
+void handle_signal();
 
 } // namespace util

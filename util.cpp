@@ -1,5 +1,8 @@
 #include "util.h"
 
+#include <signal.h>
+
+
 namespace util {
 
 void ikcp_set_mode( ikcpcb * kcp, int mode )
@@ -39,5 +42,16 @@ void ikcp_set_log( ikcpcb * kcp, int mask )
 {
     kcp->logmask |= mask;
     kcp->writelog = kcp_log;
+}
+
+void signal_handler( int sig )
+{
+    is_running = false;
+}
+void handle_signal()
+{
+    signal( SIGPIPE, SIG_IGN );
+    signal( SIGINT, signal_handler );
+    signal( SIGTERM, signal_handler );
 }
 } // namespace util

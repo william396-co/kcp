@@ -76,7 +76,7 @@ void Server::input()
     std::string writeBuffer;
     char ip[512];
     int port;
-    while ( true ) {
+    while ( is_running ) {
         memset( ip, 0, sizeof( ip ) );
         port = 0;
         writeBuffer.clear();
@@ -96,7 +96,7 @@ void Server::input()
 void Server::run()
 {
     char buff[BUFFER_SIZE];
-    while ( true ) {
+    while ( is_running ) {
         util::isleep( 1 );
         ikcp_update( kcp, util::iclock() );
 

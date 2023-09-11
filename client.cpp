@@ -35,7 +35,7 @@ void Client::input()
 {
     std::string writeBuffer;
     char buff[BUFFER_SIZE];
-    while ( true ) {
+    while ( is_running ) {
         printf( "Please enter a string to send to server(%s:%d):", client->getRemoteIp(), client->getRemotePort() );
 
         writeBuffer.clear();
@@ -61,7 +61,7 @@ void Client::run()
     uint32_t count = 0;
     uint32_t maxrtt = 0;
 
-    while ( true ) {
+    while ( is_running ) {
         util::isleep( 1 );
         ikcp_update( kcp, util::iclock() );
 
