@@ -4,19 +4,29 @@
 #include "client.h"
 #include "joining_thread.h"
 
-constexpr auto ip = "127.0.0.1";
-constexpr auto port = 9527;
+constexpr auto default_ip = "127.0.0.1";
+constexpr auto default_port = 9527;
 
 constexpr auto conv = 0x12345;
 
 int main( int argc, char ** argv )
 {
-
     int mode = 0;
+    std::string ip = default_ip;
+    uint16_t port = default_port;
+
     if ( argc >= 2 ) {
-        mode = atoi( argv[1] );
+        ip = argv[1];
     }
-    std::unique_ptr<Client> client = std::make_unique<Client>( ip, port, conv );
+
+    if ( argc >= 3 ) {
+        port = atoi( argv[2] );
+    }
+
+    if ( argc >= 4 ) {
+        mode = atoi( argv[3] );
+    }
+    std::unique_ptr<Client> client = std::make_unique<Client>( ip.c_str(), port, conv );
 
     util::ikcp_set_mode( client->getKcp(), mode );
 

@@ -113,7 +113,7 @@ void Server::run()
 
         IUINT32 sn = *(IUINT32 *)( buff );
         //  IUINT32 ts = *(IUINT32 *)( buff + 4 );
-        printf( "Received a string from client [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
+        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
             listen->getRemoteIp(),
             listen->getRemotePort(),
             listen->getLocalIp(),
