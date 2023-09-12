@@ -4,14 +4,7 @@
 #include <cstring>
 #include <algorithm>
 
-constexpr auto BUFFER_SIZE = 1024 * 4;
 static int g_sn = 0;
-
-int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
-{
-    UdpSocket * s = (UdpSocket *)user;
-    return s->send( buf, len );
-}
 
 Client::Client( const char * ip, uint16_t port, uint32_t conv )
     : client { nullptr }, md { 0 }
@@ -23,7 +16,7 @@ Client::Client( const char * ip, uint16_t port, uint32_t conv )
     }
 
     kcp = ikcp_create( conv, client.get() );
-    ikcp_setoutput( kcp, kcp_output );
+    ikcp_setoutput( kcp, util::kcp_output );
 }
 
 Client::~Client()
@@ -40,19 +33,29 @@ void Client::setmode( int mode )
 void Client::auto_input()
 {
     std::string str;
-    util::rand_str( str );
-    if ( !str.empty() ) {
-        char buff[BUFFER_SIZE];
-        ( (IUINT32 *)buff )[0] = g_sn++;
-        ( (IUINT32 *)buff )[1] = util::iclock();
+    auto current = util::now_ms();
+    uint32_t auto_send = 0;
+    while ( auto_test && auto_send < test_count ) {
+        if ( util::now_ms() - current < 30 )
+            continue;
+        str.clear();
+        current = util::now_ms();
+        ++auto_send;
+        util::rand_str( str );
+        if ( !str.empty() ) {
+            char buff[BUFFER_SIZE];
+            ( (IUINT32 *)buff )[0] = g_sn++;
+            ( (IUINT32 *)buff )[1] = util::iclock();
 
-        printf( "[%ld]auto_input sn:%u size:%lu\n", util::now_ms(), g_sn, str.size() );
+            if ( auto_test )
+                printf( "[%ld]auto_input sn:%u size:%lu\n", util::now_ms(), g_sn, str.size() );
+            else
+                printf( "[%ld]auto_input sn:%u content:{%s}\n", util::now_ms(), g_sn, str.c_str() );
 
-        // printf( "[%ld]auto_input sn:%u content:{%s}\n", util::now_ms(), g_sn, str.c_str() );
-
-        memcpy( &buff[8], str.data(), str.size() );
-        ikcp_send( kcp, buff, str.size() + 8 );
-        ikcp_update( kcp, util::iclock() );
+            memcpy( &buff[8], str.data(), str.size() );
+            ikcp_send( kcp, buff, str.size() + 8 );
+            // ikcp_update( kcp, util::iclock() );
+        }
     }
 }
 
@@ -72,7 +75,7 @@ void Client::input()
 
             memcpy( &buff[8], writeBuffer.data(), writeBuffer.size() );
             ikcp_send( kcp, buff, writeBuffer.size() + 8 );
-            ikcp_update( kcp, util::iclock() );
+            //  ikcp_update( kcp, util::iclock() );
             // client->send( writeBuffer.data(), writeBuffer.size() );
         }
     }
@@ -86,15 +89,9 @@ void Client::run()
     uint32_t count = 0;
     uint32_t maxrtt = 0;
 
-    auto current = util::now_ms();
     while ( is_running ) {
         util::isleep( 1 );
         ikcp_update( kcp, util::iclock() );
-
-        if ( util::now_ms() - current > 20 ) {
-            auto_input();
-            current = util::now_ms();
-        }
 
         // udp pack received
         if ( client->recv() < 0 ) {
@@ -114,21 +111,18 @@ void Client::run()
 
         if ( sn != next ) {
             printf( "ERROR sn %d<->%d\n", count, next );
-            break;
+            // break;
         }
         ++next;
         sumrtt += rtt;
         ++count;
         maxrtt = rtt > maxrtt ? rtt : maxrtt;
 
-        // printf( "[RECV] sn:%d rrt:%d  content: {%s}\n", sn + 1, rtt, (char *)&buff[8] );
-        printf( "[RECV] sn:%d rrt:%d\n", sn, rtt );
-        if ( next >= 1000 )
-            break;
-
-        /*        if ( client->recv() > 0 ) {
-                    printf( "Receive from server[%s:%d]: %s\n", client->getRemoteIp(), client->getRemotePort(), client->getRecvBuffer() );
-                }*/
+        if ( !auto_test )
+            printf( "[RECV] sn:%d rrt:%d  content: {%s}\n", sn + 1, rtt, (char *)&buff[8] );
+        else
+            printf( "[RECV] sn:%d rrt:%d\n", sn, rtt );
+        //        if ( next >= test_count ) break;
     }
 
     /* summary */

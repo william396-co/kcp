@@ -8,7 +8,7 @@
 #include <string>
 #include <memory>
 
-/*
+class Connection;
 using ConnID = std::pair<std::string, uint16_t>;
 
 namespace std {
@@ -25,8 +25,7 @@ struct hash<ConnID>
 };
 } // namespace std
 
-using ConnMap = std::unordered_map<ConnID, UdpSocket *>;
-*/
+using ConnMap = std::unordered_map<ConnID, Connection *>;
 
 extern bool is_running;
 
@@ -36,20 +35,20 @@ public:
     Server( uint16_t port, uint32_t conv );
     ~Server();
 
-    //   UdpSocket * findConn( const char * ip, uint16_t port );
+    Connection * findConn( const char * ip, uint16_t port );
 
+    void accept();
     void run();
-    void input();
 
     void setmode( int mode );
-
-private:
-    void doRecv();
+    void show_data( bool _show ) { show = _show; }
 
 private:
     std::unique_ptr<UdpSocket> listen;
-    //    ConnMap connections;
+    ConnMap connections;
     ikcpcb * kcp;
     int md;
+    uint16_t listen_port;
+    bool show = false;
 };
 

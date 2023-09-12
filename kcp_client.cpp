@@ -9,8 +9,6 @@
 constexpr auto default_ip = "127.0.0.1";
 constexpr auto default_port = 9527;
 
-constexpr auto conv = 0x12345;
-
 bool is_running = true;
 
 int main( int argc, char ** argv )
@@ -36,9 +34,11 @@ int main( int argc, char ** argv )
     srand( time( nullptr ) );
     std::unique_ptr<Client> client = std::make_unique<Client>( ip.c_str(), port, conv );
     client->setmode( mode );
+    client->setauto( true, 10 );
 
     joining_thread work( &Client::run, client.get() );
-    // joining_thread input( &Client::input, client.get() );
+    joining_thread input( &Client::input, client.get() );
+    joining_thread auto_input( &Client::auto_input, client.get() );
 
     return 0;
 }

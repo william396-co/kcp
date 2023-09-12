@@ -28,6 +28,9 @@
 
 extern bool is_running;
 
+constexpr auto BUFFER_SIZE = 1024 * 8;
+constexpr auto conv = 0x12345;
+
 namespace util {
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -100,5 +103,7 @@ void ikcp_set_log( ikcpcb * kcp, int mask );
 void handle_signal();
 
 void rand_str( std::string & str );
+
+int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user );
 
 } // namespace util

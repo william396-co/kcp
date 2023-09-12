@@ -1,9 +1,9 @@
 #include "util.h"
 
 #include <signal.h>
+#include "udpsocket.h"
 
 namespace util {
-
 void ikcp_set_mode( ikcpcb * kcp, int mode )
 {
     assert( mode >= 0 && mode < 3 );
@@ -60,6 +60,14 @@ void rand_str( std::string & str )
     for ( size_t i = 0; i != sz; ++i ) {
         str.push_back( rand() % 94 + 33 );
     }
+}
+
+int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
+{
+    UdpSocket * s = (UdpSocket *)user;
+    if ( s )
+        return s->send( buf, len );
+    return -1;
 }
 
 } // namespace util

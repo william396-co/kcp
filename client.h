@@ -17,14 +17,19 @@ public:
 
     void run();
     void input();
+    void auto_input();
 
     void setmode( int mode );
-
-private:
-    void auto_input();
+    void setauto( bool _auto, uint32_t count = 100 )
+    {
+        auto_test = _auto;
+        test_count = count;
+    }
 
 private:
     std::unique_ptr<UdpSocket> client;
     ikcpcb * kcp;
     int md;
+    bool auto_test = false;
+    uint32_t test_count = 10;
 };

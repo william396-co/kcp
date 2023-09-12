@@ -1,21 +1,15 @@
 #include "server.h"
 
+#include "connection.h"
+
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <iostream>
 #include <stdexcept>
 
-constexpr auto BUFFER_SIZE = 1024 * 8;
-
-int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
-{
-    UdpSocket * s = (UdpSocket *)user;
-    return s->send( buf, len );
-}
-
 Server::Server( uint16_t port, uint32_t conv )
-    : listen { nullptr }, md { 0 }
+    : listen { nullptr }, md { 0 }, listen_port { port }
 {
     listen = std::make_unique<UdpSocket>();
     listen->setNonblocking();
@@ -24,7 +18,7 @@ Server::Server( uint16_t port, uint32_t conv )
     }
 
     kcp = ikcp_create( conv, listen.get() );
-    ikcp_setoutput( kcp, kcp_output );
+    ikcp_setoutput( kcp, util::kcp_output );
 
     ikcp_wndsize( kcp, 128, 128 );
     ikcp_nodelay( kcp, 0, 10, 0, 0 );
@@ -32,9 +26,9 @@ Server::Server( uint16_t port, uint32_t conv )
 
 Server::~Server()
 {
-    /*  for ( auto & it : connections ) {
-          delete it.second;
-      }*/
+    for ( auto & it : connections ) {
+        delete it.second;
+    }
 
     ikcp_release( kcp );
 }
@@ -45,63 +39,25 @@ void Server::setmode( int mode )
     md = mode;
 }
 
-/*
-UdpSocket * Server::findConn( const char * ip, uint16_t port )
+Connection * Server::findConn( const char * remote_ip, uint16_t remote_port )
 {
-    auto it = connections.find( std::make_pair( ip, port ) );
+    auto it = connections.find( std::make_pair( remote_ip, remote_port ) );
     if ( it != connections.end() ) {
         return it->second;
     }
-    std::cout << __FUNCTION__ << "(" << ip << "," << port << ")\n";
-    UdpSocket * conn = new UdpSocket();
-    if ( conn->connect( ip, port ) ) {
-        connections.emplace( std::make_pair( ip, port ), conn );
+    Connection * conn = new Connection( listen_port, remote_ip, remote_port, conv );
+    conn->set_show( show );
+    if ( conn ) {
+        connections.emplace( std::make_pair( remote_ip, remote_port ), conn );
+        printf( "new Connection:[%s:%d] accepted\n", remote_ip, remote_port );
         return conn;
     }
     delete conn;
     return nullptr;
-}*/
-
-void Server::doRecv()
-{
-    printf( "Received a string from client [%s:%d] -> [ %s:%d], string is: %s\n",
-        listen->getRemoteIp(),
-        listen->getRemotePort(),
-        listen->getLocalIp(),
-        listen->getLocalPort(),
-        listen->getRecvBuffer() );
-
-    /* 将收到的字符串消息返回给client端 */
-    listen->send( listen->getRecvBuffer(), listen->getRecvSize(), listen->getRemoteIp(), listen->getRemotePort() );
 }
 
-void Server::input()
+void Server::accept()
 {
-    return; // TODO
-
-    std::string writeBuffer;
-    char ip[512];
-    int port;
-    while ( is_running ) {
-        memset( ip, 0, sizeof( ip ) );
-        port = 0;
-        writeBuffer.clear();
-
-        printf( "Enter Send Ip:" );
-        scanf( "%s\n", ip );
-        printf( "Enter Send Port:" );
-        scanf( "%d\n", &port );
-        printf( "Enter a string send to client:" );
-        std::getline( std::cin, writeBuffer );
-        if ( ip[0] != '\0' && port > 0 && !writeBuffer.empty() ) {
-            listen->send( writeBuffer.data(), writeBuffer.size(), ip, port );
-        }
-    }
-}
-
-void Server::run()
-{
-    char buff[BUFFER_SIZE];
     while ( is_running ) {
         util::isleep( 1 );
         ikcp_update( kcp, util::iclock() );
@@ -110,36 +66,21 @@ void Server::run()
         if ( listen->recv() <= 0 ) {
             continue;
         }
-        ikcp_input( kcp, listen->getRecvBuffer(), listen->getRecvSize() );
 
-        bzero( buff, sizeof( buff ) );
-        // user level recv
-        int rc = ikcp_recv( kcp, buff, BUFFER_SIZE );
-        if ( rc < 0 ) continue;
-
-        IUINT32 sn = *(IUINT32 *)( buff );
-        //  IUINT32 ts = *(IUINT32 *)( buff + 4 );
-        /*        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
-                    listen->getRemoteIp(),
-                    listen->getRemotePort(),
-                    listen->getLocalIp(),
-                    listen->getLocalPort(),
-                    sn + 1,
-                    &buff[8] );*/
-
-        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d]  ts{ %ld}\n",
-            listen->getRemoteIp(),
-            listen->getRemotePort(),
-            listen->getLocalIp(),
-            listen->getLocalPort(),
-            sn + 1,
-            util::now_ms() );
-
-        // send back to client
-        ikcp_send( kcp, buff, rc );
-
-        /*if ( listen->recv() > 0 ) {
-            doRecv();}*/
+        auto conn = findConn( listen->getRemoteIp(), listen->getRemotePort() );
+        if ( conn ) {
+            conn->recv_data( listen->getRecvBuffer(), listen->getRecvSize() );
+            continue;
+        }
     }
 }
 
+void Server::run()
+{
+    while ( is_running ) {
+
+        for ( auto & it : connections ) {
+            it.second->update();
+        }
+    }
+}

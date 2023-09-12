@@ -6,10 +6,6 @@
 
 constexpr auto ip = "127.0.0.1";
 constexpr auto port = 9527;
-constexpr auto BUFFER_SIZE = 1024;
-
-constexpr auto conv = 0x12345;
-constexpr auto suser = 0x100;
 
 bool is_running = true;
 
@@ -24,11 +20,11 @@ int main( int argc, char ** argv )
     }
     std::unique_ptr<Server> server = std::make_unique<Server>( port, conv );
     server->setmode( mode );
-
+    //  server->show_data( true );
     //    util::ikcp_set_log(IKCP_LOG_INPUT|IKCP_LOG_OUTPUT);
 
+    joining_thread accept( &Server::accept, server.get() );
     joining_thread work( &Server::run, server.get() );
-    joining_thread input( &Server::input, server.get() );
 
     return 0;
 }
