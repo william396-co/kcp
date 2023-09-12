@@ -1,4 +1,6 @@
 #include <memory>
+#include <ctime>
+#include <cstdlib>
 
 #include "util.h"
 #include "client.h"
@@ -30,12 +32,13 @@ int main( int argc, char ** argv )
     if ( argc >= 4 ) {
         mode = atoi( argv[3] );
     }
-    std::unique_ptr<Client> client = std::make_unique<Client>( ip.c_str(), port, conv );
 
-    util::ikcp_set_mode( client->getKcp(), mode );
+    srand( time( nullptr ) );
+    std::unique_ptr<Client> client = std::make_unique<Client>( ip.c_str(), port, conv );
+    client->setmode( mode );
 
     joining_thread work( &Client::run, client.get() );
-    joining_thread input( &Client::input, client.get() );
+    // joining_thread input( &Client::input, client.get() );
 
     return 0;
 }

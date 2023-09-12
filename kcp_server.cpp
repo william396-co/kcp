@@ -23,8 +23,8 @@ int main( int argc, char ** argv )
         mode = atoi( argv[1] );
     }
     std::unique_ptr<Server> server = std::make_unique<Server>( port, conv );
+    server->setmode( mode );
 
-    util::ikcp_set_mode( server->getKcp(), mode );
     //    util::ikcp_set_log(IKCP_LOG_INPUT|IKCP_LOG_OUTPUT);
 
     joining_thread work( &Server::run, server.get() );

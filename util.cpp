@@ -2,7 +2,6 @@
 
 #include <signal.h>
 
-
 namespace util {
 
 void ikcp_set_mode( ikcpcb * kcp, int mode )
@@ -54,4 +53,13 @@ void handle_signal()
     signal( SIGINT, signal_handler );
     signal( SIGTERM, signal_handler );
 }
+
+void rand_str( std::string & str )
+{
+    size_t sz = rand() % 2000;
+    for ( size_t i = 0; i != sz; ++i ) {
+        str.push_back( rand() % 94 + 33 );
+    }
+}
+
 } // namespace util

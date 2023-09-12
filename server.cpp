@@ -15,7 +15,7 @@ int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
 }
 
 Server::Server( uint16_t port, uint32_t conv )
-    : listen { nullptr }
+    : listen { nullptr }, md { 0 }
 {
     listen = std::make_unique<UdpSocket>();
     listen->setNonblocking();
@@ -37,6 +37,12 @@ Server::~Server()
       }*/
 
     ikcp_release( kcp );
+}
+
+void Server::setmode( int mode )
+{
+    util::ikcp_set_mode( kcp, mode );
+    md = mode;
 }
 
 /*
@@ -113,13 +119,21 @@ void Server::run()
 
         IUINT32 sn = *(IUINT32 *)( buff );
         //  IUINT32 ts = *(IUINT32 *)( buff + 4 );
-        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
+        /*        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d] string is:{ %s}\n",
+                    listen->getRemoteIp(),
+                    listen->getRemotePort(),
+                    listen->getLocalIp(),
+                    listen->getLocalPort(),
+                    sn + 1,
+                    &buff[8] );*/
+
+        printf( "RECV [%s:%d] -> [ %s:%d], sn:[%d]  ts{ %ld}\n",
             listen->getRemoteIp(),
             listen->getRemotePort(),
             listen->getLocalIp(),
             listen->getLocalPort(),
-            sn,
-            &buff[8] );
+            sn + 1,
+            util::now_ms() );
 
         // send back to client
         ikcp_send( kcp, buff, rc );

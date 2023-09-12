@@ -14,7 +14,7 @@ int32_t kcp_output( const char * buf, int len, ikcpcb * kcp, void * user )
 }
 
 Client::Client( const char * ip, uint16_t port, uint32_t conv )
-    : client { nullptr }
+    : client { nullptr }, md { 0 }
 {
     client = std::make_unique<UdpSocket>();
     client->setNonblocking();
@@ -29,6 +29,31 @@ Client::Client( const char * ip, uint16_t port, uint32_t conv )
 Client::~Client()
 {
     ikcp_release( kcp );
+}
+
+void Client::setmode( int mode )
+{
+    util::ikcp_set_mode( kcp, mode );
+    md = mode;
+}
+
+void Client::auto_input()
+{
+    std::string str;
+    util::rand_str( str );
+    if ( !str.empty() ) {
+        char buff[BUFFER_SIZE];
+        ( (IUINT32 *)buff )[0] = g_sn++;
+        ( (IUINT32 *)buff )[1] = util::iclock();
+
+        printf( "[%ld]auto_input sn:%u size:%lu\n", util::now_ms(), g_sn, str.size() );
+
+        // printf( "[%ld]auto_input sn:%u content:{%s}\n", util::now_ms(), g_sn, str.c_str() );
+
+        memcpy( &buff[8], str.data(), str.size() );
+        ikcp_send( kcp, buff, str.size() + 8 );
+        ikcp_update( kcp, util::iclock() );
+    }
 }
 
 void Client::input()
@@ -61,9 +86,15 @@ void Client::run()
     uint32_t count = 0;
     uint32_t maxrtt = 0;
 
+    auto current = util::now_ms();
     while ( is_running ) {
         util::isleep( 1 );
         ikcp_update( kcp, util::iclock() );
+
+        if ( util::now_ms() - current > 20 ) {
+            auto_input();
+            current = util::now_ms();
+        }
 
         // udp pack received
         if ( client->recv() < 0 ) {
@@ -90,9 +121,9 @@ void Client::run()
         ++count;
         maxrtt = rtt > maxrtt ? rtt : maxrtt;
 
-        printf( "[RECV] sn:%d rrt:%d  content: {%s}\n", sn, rtt, &buff[8] );
-
-        if ( next > 10 )
+        // printf( "[RECV] sn:%d rrt:%d  content: {%s}\n", sn + 1, rtt, (char *)&buff[8] );
+        printf( "[RECV] sn:%d rrt:%d\n", sn, rtt );
+        if ( next >= 1000 )
             break;
 
         /*        if ( client->recv() > 0 ) {
@@ -101,5 +132,6 @@ void Client::run()
     }
 
     /* summary */
-    printf( "avgrtt=%d maxrtt=%d \n", int( sumrtt / count ), maxrtt );
+    if ( count > 0 )
+        printf( "\n MODE=[%d] avgrtt=%d maxrtt=%d count=%d \n", md, int( sumrtt / count ), maxrtt, count );
 }

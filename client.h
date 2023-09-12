@@ -18,9 +18,13 @@ public:
     void run();
     void input();
 
-    ikcpcb * getKcp() { return kcp; }
+    void setmode( int mode );
+
+private:
+    void auto_input();
 
 private:
     std::unique_ptr<UdpSocket> client;
     ikcpcb * kcp;
+    int md;
 };

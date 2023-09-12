@@ -24,6 +24,7 @@
 #include <thread>
 #include <iostream>
 #include <cstdio>
+#include <string>
 
 extern bool is_running;
 
@@ -97,5 +98,7 @@ void ikcp_set_mode( ikcpcb * kcp, int mode );
 void ikcp_set_log( ikcpcb * kcp, int mask );
 
 void handle_signal();
+
+void rand_str( std::string & str );
 
 } // namespace util
