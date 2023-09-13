@@ -46,6 +46,7 @@ Connection * Server::findConn( const char * remote_ip, uint16_t remote_port )
         return it->second;
     }
     Connection * conn = new Connection( listen_port, remote_ip, remote_port, conv );
+    conn->setmode( md );
     conn->set_show( show );
     if ( conn ) {
         connections.emplace( std::make_pair( remote_ip, remote_port ), conn );
