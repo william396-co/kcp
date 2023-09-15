@@ -142,12 +142,16 @@ private:
 	int waitsnd();
 
 	
-	void log(int mask, const char* fmt, ...); 
+	void write_log(int mask, const char* fmt, ...);
 
 	int setinterval(int interval);
 	
 	// check log mask
 	bool canlog(int mask);
+
+	int wnd_unused();
+
+	int on_output(const char* data, int size);
 
 private:
 	uint32_t conv, mtu, mss, state;

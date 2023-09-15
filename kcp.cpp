@@ -105,7 +105,7 @@ inline const char* ikcp_decode32u(const char* p, uint32_t* l)
 }
 
 
-void Kcp::log(int mask, const char* fmt, ...) {
+void Kcp::write_log(int mask, const char* fmt, ...) {
 	if ((mask & logmask) == 0 || !on_write_log_)
 		return;
 
@@ -193,13 +193,40 @@ int Kcp::recv(char* buffer, int len) {
 
 void Kcp::flush()
 {
+	if (!updated)return;
+
+	kcpSeg seg{};
+
+	seg.conv = conv;
+	seg.cmd = IKCP_CMD_ACK;
+	seg.frg = 0;
+	seg.wnd = wnd_unused();
+	seg.una = rcv_nxt;
+	seg.len = 0;
+	seg.sn = 0;
+	seg.ts = 0;
+
+	char* buffer_ = buffer;
+	char* ptr = buffer;
+
+	// flush acknowledges
+	int count = ackcount;
+	for (int i = 0; i != count; ++i) {
+		int size = ptr - buffer;
+		if (size + IKCP_OVERHEAD > mtu) {
+			on_output();
+			ptr = buffer_;
+		}
+	}
+
 
 }
+
 
 int Kcp::input(const char* data, long size) {
 
 	if (canlog(log_Input)) {
-		log(log_Input, "[RI] %d bytes", size);
+		write_log(log_Input, "[RI] %d bytes", size);
 	}
 
 	if (!data || size < IKCP_OVERHEAD)
@@ -327,4 +354,20 @@ bool Kcp::canlog(int mask) {
 
 int Kcp::waitsnd() {
 	return nsnd_buf + nsnd_que;
+}
+
+int Kcp::wnd_unused()
+{
+	if (nrcv_que < rcv_wnd)
+		return rcv_wnd - nrcv_que;
+	return 0;
+}
+
+int Kcp::on_output(const char* data, int size) {
+
+	if (canlog(log_Output)) {
+		write_log(log_Output, "[RO] %ld bytes", size);
+	}
+	if (size == 0)return 0;
+	return on_output_(data, size, this, user);
 }
