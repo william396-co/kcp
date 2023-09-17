@@ -54,7 +54,22 @@ struct kcpSeg
 	uint32_t rto;
 	uint32_t fastack;// Fast Ack
 	uint32_t xmit;
-	char data[1];
+	char* data;
+
+	explicit kcpSeg(int size, uint32_t conv_, uint32_t cmd_, uint32_t frg_, uint32_t wnd_, uint32_t ts_, uint32_t una_) :
+		conv{ conv_ }, cmd{ cmd_ }, frg{ frg_ },
+		wnd{ wnd_ }, ts{ ts_ }, sn{ 0 }, una{ una_ },
+		len{ size }, resendts{ 0 }, rto{ 0 },
+		fastack{ 0 }, xmit{ 0 }
+	{
+		if (len > 0) {
+			data = new char[size];
+		}
+	}
+	~kcpSeg() {
+		delete[] data;
+	}
+
 };
 
 using SeqQueue = std::list<kcpSeg*>;
@@ -136,7 +151,7 @@ public:
 
 private:
 	// check the size of next message in the recv queue
-	int get_peeksize();
+	int peeksize();
 
 	// get how many packet is waiting to be sent
 	int waitsnd();
@@ -145,14 +160,45 @@ private:
 	void write_log(int mask, const char* fmt, ...);
 
 	int setinterval(int interval);
-	
+
+	int output(const char* data, int size);
+
 	// check log mask
 	bool canlog(int mask);
+	//---------------------------------------------------------------------
+	// ikcp_encode_seg
+	//---------------------------------------------------------------------
+	char* encode_seg(char* ptr_, const kcpSeg* seg_);
 
 	int wnd_unused();
 
-	int on_output(const char* data, int size);
+	//---------------------------------------------------------------------
+	// ack append
+	//---------------------------------------------------------------------
+	void ack_push(uint32_t sn_, uint32_t ts_);
 
+	void ack_get(int p, uint32_t* sn, uint32_t* ts);
+
+	//---------------------------------------------------------------------
+	// parse data
+	//---------------------------------------------------------------------
+	void parse_data(kcpSeg* newseg_);
+ 
+	//---------------------------------------------------------------------
+	// parse ack
+	//---------------------------------------------------------------------
+	void update_ack(int32_t rtt_);
+
+	void shrink_buf();
+
+	void parse_ack(uint32_t sn_);
+
+	void parse_una(uint32_t una_);
+
+	void parse_fastack(uint32_t sn_, uint32_t ts_);
+private:
+
+	bool valide_cmd(uint8_t cmd);
 private:
 	uint32_t conv, mtu, mss, state;
 	uint32_t snd_una, snd_nxt, rcv_nxt;
