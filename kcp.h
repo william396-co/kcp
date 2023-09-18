@@ -117,7 +117,7 @@ public:
 	// user/upper level recv: returns size, returns below zero for EAGAIN
 	int recv(char* buffer_, int len_);
 	// user/upper level send, returns below zero for error
-	int send(const char* data_, int len_);
+	int send(const char* buffer_, int len_);
 
 	// update state (call it repeatedly, every 10ms-100ms), or you can ask 
 	// ikcp_check when to call it again (without ikcp_input/_send calling).
@@ -134,7 +134,7 @@ public:
 	uint32_t check(uint32_t current_);
 
 	// when you received a low level packet (eg. UDP packet), call it
-	int input(const char* data, long size);
+	int input(const char* data_, long size_);
 
 	// flush pending data
 	void flush();

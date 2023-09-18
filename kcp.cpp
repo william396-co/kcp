@@ -185,24 +185,29 @@ Kcp::~Kcp()
 	if (acklist)
 		delete[] acklist;
 }
-
+//---------------------------------------------------------------------
+// user/upper level recv: returns size, returns below zero for EAGAIN
+//---------------------------------------------------------------------
 int Kcp::recv(char* buffer_, int len_) {
 
 	if (rcv_queue.empty())return-1;
 
 	bool ispeek = (len_ < 0) ? true : false;
-	int recover = 0;
+	bool recover = false;
 
 	if (len_ < 0)len_ = -len_;
 
 	int peeksize_ = peeksize();
-	if (peeksize_ < 0)
+	if (peeksize_ < 0) {
 		return -2;
-	if (peeksize_ > len_)
+	}
+	if (peeksize_ > len_) {
 		return-3;
+	}
 
-	if (nrcv_que >= rcv_wnd)
-		recover = 1;
+	if (nrcv_que >= rcv_wnd) {
+		recover = true;
+	}
 
 	// merge fragment	
 	len_ = 0;
@@ -260,11 +265,15 @@ int Kcp::recv(char* buffer_, int len_) {
 	return len_;
 }
 
+//---------------------------------------------------------------------
 // user/upper level send, returns below zero for error
-int Kcp::send(const char* data_, int len_)
+//---------------------------------------------------------------------
+int Kcp::send(const char* buffer_, int len_)
 {
 	assert(mss > 0);
-	if (len_ < 0)return -1;
+	if (len_ < 0) { 
+		return -1; 
+	}
 
 	int sent = 0;
 	kcpSeg* seg = nullptr;
@@ -272,27 +281,26 @@ int Kcp::send(const char* data_, int len_)
 
 	// append to previous segment in streaming mode(if possible)
 	if (stream != 0) {
-		if (!snd_queue.empty()) {
-			auto p = snd_queue.begin();
-			auto old = *p;
-			if (old->len < mss) {
-				int cap = mss - old->len;
+		if (!snd_queue.empty()) {			
+			auto old = snd_queue.begin();
+			if ((*old)->len < mss) {
+				int cap = mss - (*old)->len;
 				int extend = (len_ < cap) ? len_ : cap;
-				seg = new kcpSeg(old->len + extend, conv, old->cmd, 0, old->wnd, old->ts, old->una);
+				seg = new kcpSeg((*old)->len + extend, conv, (*old)->cmd, 0, (*old)->wnd, (*old)->ts, (*old)->una);
 				assert(seg);
 				if (!seg) {
 					return -2;
 				}
 				snd_queue.push_back(seg);
-				memcpy(seg->data, old->data, old->len);
-				if (data_) {
-					memcpy(seg->data + old->len, data_, extend);
-					data_ += extend;
+				memcpy(seg->data, (*old)->data, (*old)->len);
+				if (buffer_) {
+					memcpy(seg->data + (*old)->len, buffer_, extend);
+					buffer_ += extend;
 				}
 				seg->frg = 0;
 				len_ -= extend;
-				delete old;
-				snd_queue.erase(p);
+				delete *old;
+				snd_queue.erase(old);
 				sent = extend;
 			}
 		}
@@ -300,9 +308,11 @@ int Kcp::send(const char* data_, int len_)
 			return sent;
 	}
 
-	if (len_ <= (int)mss)count = 1;
-	else
+	if (len_ <= (int)mss) {
+		count = 1; 
+	}else {
 		count = (len_ + mss - 1) / mss;
+	}
 
 	if (count >= IKCP_WND_RCV) {
 		if (stream != 0 && sent > 0)
@@ -310,7 +320,9 @@ int Kcp::send(const char* data_, int len_)
 		return -2;
 	}
 
-	if (count == 0)count = 1;
+	if (count == 0) {
+		count = 1;
+	}
 
 	// fragment
 	for (int i = 0; i < count; ++i) {
@@ -321,14 +333,14 @@ int Kcp::send(const char* data_, int len_)
 			return -2;
 		}
 
-		if (data_ && len_ > 0) {
-			memcpy(seg->data, data_, size);
+		if (buffer_ && len_ > 0) {
+			memcpy(seg->data, buffer_, size);
 		}
 		seg->frg = stream == 0 ? (count - i - 1) : 0;
 		snd_queue.push_back(seg);
 		nsnd_que++;
-		if (data_) {
-			data_ += size;
+		if (buffer_) {
+			buffer_ += size;
 		}
 		len_ -= size;
 		sent += size;
@@ -539,14 +551,16 @@ void Kcp::flush()
 }
 
 
-int Kcp::input(const char* data, long size) {
+/* input data */
+int Kcp::input(const char* data_, long size_) {
 
 	if (canlog(log_Input)) {
-		write_log(log_Input, "[RI] %d bytes", size);
+		write_log(log_Input, "[RI] %d bytes", size_);
 	}
 
-	if (!data || size < IKCP_OVERHEAD)
+	if (!data_ || size_ < IKCP_OVERHEAD) {
 		return -1;
+	}
 
 	uint32_t prev_una = snd_una;
 	uint32_t maxack = 0, latest_ts = 0;
@@ -558,24 +572,26 @@ int Kcp::input(const char* data, long size) {
 		uint8_t cmd_, frg_;
 		kcpSeg* seg = nullptr;
 
-		if (size < IKCP_OVERHEAD)break;
+		if (size_ < IKCP_OVERHEAD)break;
 
-		data = ikcp_decode32u(data, &conv_);
-		if (conv_ != conv)return-1;
+		data_ = ikcp_decode32u(data_, &conv_);
+		if (conv_ != conv) {
+			return-1;
+		}
 
-		data = ikcp_decode8u(data, &cmd_);
-		data = ikcp_decode8u(data, &frg_);
-		data = ikcp_decode16u(data, &wnd_);
-		data = ikcp_decode32u(data, &ts_);
-		data = ikcp_decode32u(data, &sn_);
-		data = ikcp_decode32u(data, &una_);
-		data = ikcp_decode32u(data, &len_);
+		data_ = ikcp_decode8u(data_, &cmd_);
+		data_ = ikcp_decode8u(data_, &frg_);
+		data_ = ikcp_decode16u(data_, &wnd_);
+		data_ = ikcp_decode32u(data_, &ts_);
+		data_ = ikcp_decode32u(data_, &sn_);
+		data_ = ikcp_decode32u(data_, &una_);
+		data_ = ikcp_decode32u(data_, &len_);
 
-		size -= IKCP_OVERHEAD;
+		size_ -= IKCP_OVERHEAD;
 
-		if ((long)size < (long)len_ || (int)len_ < 0)return -2;
+		if ((long)size_ < (long)len_ || (int)len_ < 0)return -2;
 
-		if (!valide_cmd(cmd_))return-3;
+		if (!valide_cmd(cmd_)) { return-3; }
 
 		rmt_wnd = wnd_;
 		parse_una(una_);
@@ -619,7 +635,7 @@ int Kcp::input(const char* data, long size) {
 				ack_push(sn_, ts_);
 				seg = new kcpSeg(len_, conv, cmd_, frg_, wnd_, ts_, una_);
 				if (len_) {
-					memcpy(seg->data, data, len_);
+					memcpy(seg->data, data_, len_);
 				}
 				parse_data(seg);
 			}
@@ -642,8 +658,8 @@ int Kcp::input(const char* data, long size) {
 			return -3;
 		}
 
-		data += len_;
-		size -= len_;
+		data_ += len_;
+		size_ -= len_;
 	}
 
 	if (flag) {
@@ -661,7 +677,7 @@ int Kcp::input(const char* data, long size) {
 				if (incr < mss_)
 					incr = mss_;
 				incr += (mss_ * mss_) / incr + (mss_ / 16);
-				if ((cwnd + 1) * mss_ < incr) {
+				if ((cwnd + 1) * mss_ <= incr) {
 #if 1
 					cwnd = (incr + mss_ - 1) / ((mss_ > 0) ? mss_ : 1);
 #else
@@ -680,6 +696,11 @@ int Kcp::input(const char* data, long size) {
 	return 0;
 }
 
+//---------------------------------------------------------------------
+// update state (call it repeatedly, every 10ms-100ms), or you can ask 
+// ikcp_check when to call it again (without ikcp_input/_send calling).
+// 'current' - current timestamp in millisec. 
+//---------------------------------------------------------------------
 void Kcp::update(uint32_t current_) {
 
 	current = current_;
@@ -861,7 +882,9 @@ int Kcp::output(const char* data, int size) {
 	if (size == 0)return 0;
 	return on_output_(data, size, this, user);
 }
-
+//---------------------------------------------------------------------
+// ack append
+//---------------------------------------------------------------------
 void Kcp::ack_push(uint32_t sn_, uint32_t ts_)
 {
 	uint32_t newsize = ackcount + 1;
@@ -893,14 +916,17 @@ void Kcp::ack_push(uint32_t sn_, uint32_t ts_)
 	ackcount++;
 }
 
-void Kcp::ack_get(int p, uint32_t* sn, uint32_t* ts)
+void Kcp::ack_get(int p, uint32_t* sn_, uint32_t* ts_)
 {
-	if (sn)
-		sn[0] = acklist[p * 2];
-	if (ts)
-		ts[0] = acklist[p * 2 + 1];
+	if (sn_)
+		sn_[0] = acklist[p * 2];
+	if (ts_)
+		ts_[0] = acklist[p * 2 + 1];
 }
 
+//---------------------------------------------------------------------
+// parse data
+//---------------------------------------------------------------------
 void Kcp::parse_data(kcpSeg* newseg_)
 {
 	uint32_t sn_ = newseg_->sn;
@@ -911,9 +937,6 @@ void Kcp::parse_data(kcpSeg* newseg_)
 		return;
 	}
 
-	bool repeat = false;
-
-
 	for (auto it = rcv_buf.begin(); it != rcv_buf.end(); ++it) {
 		if ((*it)->sn == sn_) {
 			delete newseg_;
@@ -921,6 +944,7 @@ void Kcp::parse_data(kcpSeg* newseg_)
 		}
 		if (timediff(sn_, (*it)->sn) > 0) {
 			rcv_buf.insert(it, newseg_);
+			nrcv_buf++;
 			break;
 		}
 	}
@@ -981,8 +1005,8 @@ void Kcp::parse_ack(uint32_t sn_)
 
 	for (auto it = snd_buf.begin(); it != snd_buf.end(); ++it) {
 		if (sn_ == (*it)->sn) {
-			it = snd_buf.erase(it);
 			delete (*it);
+			it = snd_buf.erase(it);
 			nsnd_buf--;
 			break;
 		}
@@ -996,8 +1020,8 @@ void Kcp::parse_una(uint32_t una_)
 {
 	for (auto it = snd_buf.begin(); it != snd_buf.end(); ) {
 		if (timediff(una_, (*it)->sn) > 0) {
-			it = snd_buf.erase(it);
 			delete (*it);
+			it = snd_buf.erase(it);
 			nsnd_buf--;
 		}
 		else {
