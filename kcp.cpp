@@ -345,7 +345,7 @@ void Kcp::flush()
 	kcpSeg seg{ 0,conv,IKCP_CMD_ACK,0,(uint32_t)wnd_unused(),0,rcv_nxt };
 
 	char* buffer_ = buffer;
-	char* ptr = buffer;
+	char* ptr_ = buffer;
 	auto current_ = current;
 
 
@@ -353,13 +353,13 @@ void Kcp::flush()
 	int count = ackcount;
 	int size = 0;
 	for (int i = 0; i != count; ++i) {
-		size = int(ptr - buffer);
+		size = int(ptr_ - buffer_);
 		if (size + IKCP_OVERHEAD > (int)mtu) {
 			output(buffer_, size);
-			ptr = buffer_;
+			ptr_ = buffer_;
 		}
 		ack_get(i, &seg.sn, &seg.ts);
-		ptr = encode_seg(ptr, &seg);
+		ptr_ = encode_seg(ptr_, &seg);
 	}
 
 	ackcount = 0;
@@ -389,12 +389,23 @@ void Kcp::flush()
 	// flush window probing commands
 	if (probe & IKCP_ASK_SEND) {
 		seg.cmd = IKCP_CMD_WASK;
-		size = (int)(ptr - buffer);
+		size = (int)(ptr_ - buffer_);
 		if (size + (int)IKCP_OVERHEAD > (int)mtu) {
-			output(buffer, size);
-			ptr = buffer;
+			output(buffer_, size);
+			ptr_ = buffer_;
 		}
-		ptr = encode_seg(ptr, &seg);
+		ptr_ = encode_seg(ptr_, &seg);
+	}
+
+	// flush window probing commands
+	if (probe & IKCP_ASK_TELL) {
+		seg.cmd = IKCP_CMD_WINS;
+		size = (int)(ptr_ - buffer_);
+		if (size + (int)IKCP_OVERHEAD > (int)mtu) {
+			output(buffer_, size);
+			ptr_ = buffer_;
+		}
+		ptr_ = encode_seg(ptr_, &seg);
 	}
 
 	probe = 0;
@@ -406,15 +417,16 @@ void Kcp::flush()
 	// calculate resent
 	uint32_t resent_, rtomin_;
 
+	// move data from snd_queue to snd_buf
 	while (timediff(snd_nxt, snd_una + cwnd_) < 0)
 	{
 		kcpSeg* newseg = nullptr;
 
-		if (snd_queue.empty())return;
+		if (snd_queue.empty())break;
 
 		newseg = snd_queue.front();
 		snd_queue.pop_front();
-		snd_queue.push_back(newseg);
+		snd_buf.push_back(newseg);
 		nsnd_que--;
 		nsnd_buf++;
 
@@ -476,29 +488,28 @@ void Kcp::flush()
 			segment->wnd = seg.wnd;
 			segment->una = rcv_nxt;
 
-			size = (int)(ptr - buffer_);
+			size = (int)(ptr_ - buffer_);
 			need = IKCP_OVERHEAD + segment->len;
 
 			if (size + need > (int)mtu) {
 				output(buffer_, size);
-				ptr = buffer_;
+				ptr_ = buffer_;
 			}
 
-			ptr = encode_seg(ptr, segment);
+			ptr_ = encode_seg(ptr_, segment);
 			if (segment->len > 0) {
-				memcpy(ptr, segment->data, segment->len);
-				ptr += segment->len;
+				memcpy(ptr_, segment->data, segment->len);
+				ptr_ += segment->len;
 			}
 
 			if (segment->xmit >= dead_link) {
 				state = UINT32_MAX;
 			}
-
 		}
 	}
 
 	// flash remain segments
-	size = (int)(ptr - buffer_);
+	size = (int)(ptr_ - buffer_);
 	if (size > 0) {
 		output(buffer_, size);
 	}
