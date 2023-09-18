@@ -138,38 +138,37 @@ public:
 
 	// flush pending data
 	void flush();
+	
+	// check the size of next message in the recv queue
+	int peeksize();
 
 	// change MTU size, default is 1400
 	int setmtu(int mtu_);
 
 	// set maximum window size: sndwnd=32, rcvwnd=32 by default
-	int set_wndsize(int sndwnd, int rcvwnd);
+	int set_wndsize(int sndwnd_, int rcvwnd_);
+
+	// get how many packet is waiting to be sent
+	int waitsnd();
 
 	// fastest: ikcp_nodelay(kcp, 1, 20, 2, 1)
 	// nodelay: 0:disable(default), 1:enable
 	// interval: internal update timer interval in millisec, default is 100ms 
 	// resend: 0:disable fast resend(default), 1:enable fast resend
 	// nc: 0:normal congestion control(default), 1:disable congestion control
-	int set_nodelay(int nodelay_, int interval_, int resend_, int nc);
+	int set_nodelay(int nodelay_, int interval_, int resend_, int nc_);
 public:
 	void set_rx_minrto(int rx_minrto_) { rx_minrto = rx_minrto_; }
 	void set_fastresend(int fastresend_) { fastresend = fastresend_; }
-private:
-	// check the size of next message in the recv queue
-	int peeksize();
-
-	// get how many packet is waiting to be sent
-	int waitsnd();
-
-	
+private:	
 	void write_log(int mask, const char* fmt, ...);
 
-	int setinterval(int interval);
+	int setinterval(int interval_);
 
-	int output(const char* data, int size);
+	int output(const char* data_, int size_);
 
 	// check log mask
-	bool canlog(int mask);
+	bool canlog(int mask_);
 	//---------------------------------------------------------------------
 	// ikcp_encode_seg
 	//---------------------------------------------------------------------
@@ -182,7 +181,7 @@ private:
 	//---------------------------------------------------------------------
 	void ack_push(uint32_t sn_, uint32_t ts_);
 
-	void ack_get(int p, uint32_t* sn, uint32_t* ts);
+	void ack_get(int p, uint32_t* sn_, uint32_t* ts_);
 
 	//---------------------------------------------------------------------
 	// parse data
@@ -201,9 +200,8 @@ private:
 	void parse_una(uint32_t una_);
 
 	void parse_fastack(uint32_t sn_, uint32_t ts_);
-private:
 
-	bool valide_cmd(uint8_t cmd);
+	bool valide_cmd(uint8_t cmd_);
 private:
 	uint32_t conv, mtu, mss, state;
 	uint32_t snd_una, snd_nxt, rcv_nxt;

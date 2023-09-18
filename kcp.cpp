@@ -78,7 +78,7 @@ namespace {
 		return p;
 	}
 
-	/* encode 32 bits unsigned int (lsb) */	
+	/* encode 32 bits unsigned int (lsb) */
 	inline	char* ikcp_encode32u(char* p, uint32_t l)
 	{
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
@@ -337,6 +337,7 @@ int Kcp::send(const char* data_, int len_)
 	return 0;
 }
 
+/* flush */
 void Kcp::flush()
 {
 	if (!updated)return;
@@ -669,6 +670,7 @@ int Kcp::input(const char* data, long size) {
 }
 
 void Kcp::update(uint32_t current_) {
+
 	current = current_;
 
 	if (!updated) {
@@ -691,47 +693,51 @@ void Kcp::update(uint32_t current_) {
 	}
 }
 
-bool Kcp::valide_cmd(uint8_t cmd) {
-	return cmd == IKCP_CMD_PUSH ||
-		cmd == IKCP_CMD_ACK ||
-		cmd == IKCP_CMD_WASK ||
-		cmd == IKCP_CMD_WINS;
+bool Kcp::valide_cmd(uint8_t cmd_)
+{
+	return cmd_ == IKCP_CMD_PUSH ||
+		cmd_ == IKCP_CMD_ACK ||
+		cmd_ == IKCP_CMD_WASK ||
+		cmd_ == IKCP_CMD_WINS;
 }
 
-uint32_t Kcp::check(uint32_t current) {
+uint32_t Kcp::check(uint32_t current_) {
 
-	if (!updated)
-		return current;
+	if (!updated) {
+		return current_;
+	}
+
 	uint32_t ts_flush_ = ts_flush;
 
-	if (timediff(current, ts_flush_) >= 10000 ||
-		timediff(current, ts_flush_) < -10000) {
-			ts_flush_ = current;
+	if (timediff(current_, ts_flush_) >= 10000 ||
+		timediff(current_, ts_flush_) < -10000) {
+		ts_flush_ = current_;
 	}
 
-	if (timediff(current, ts_flush_) >= 0) {
-		return current;
+	if (timediff(current_, ts_flush_) >= 0) {
+		return current_;
 	}
 
-	int32_t tm_packet = 0x7fffffff;
-	int32_t tm_flush = timediff(ts_flush_, current);
+	int32_t tm_packet_ = 0x7fffffff;
+	int32_t tm_flush_ = timediff(ts_flush_, current_);
 
 	for (auto it = snd_buf.begin(); it != snd_buf.end(); ++it) {
 
-		int32_t diff = timediff((*it)->resendts, current);
+		int32_t diff = timediff((*it)->resendts, current_);
 		if (diff <= 0)
-			return current;
-		if (diff < tm_packet)
-			tm_packet = diff;
+			return current_;
+		if (diff < tm_packet_)
+			tm_packet_ = diff;
 	}
 
-	uint32_t minimal = (uint32_t)(std::min(tm_packet, tm_flush));
+	uint32_t minimal = (uint32_t)(std::min(tm_packet_, tm_flush_));
 	if (minimal >= interval)
 		minimal = interval;
 
-	return current + minimal;
+	return current_ + minimal;
 }
 
+/* peek data size */
 int Kcp::peeksize()
 {
 	if (rcv_queue.empty())
@@ -742,18 +748,20 @@ int Kcp::peeksize()
 
 	if (nrcv_que < (*p)->frg + 1)return -1;
 
-	int len = 0;
+	int len_ = 0;
 	for (; p != rcv_queue.end(); ++p) {
-		len += (*p)->len;
+		len_ += (*p)->len;
 		if ((*p)->frg == 0)break;
 	}
-	return len;
+	return len_;
 }
 
-int Kcp::setmtu(int mtu_) {
+int Kcp::setmtu(int mtu_)
+{
 	if (mtu_ < 50 || mtu_ < IKCP_OVERHEAD)
 		return -1;
-	char* buffer_ = new char[mtu_ + IKCP_OVERHEAD * 3];
+
+	char* buffer_ = new char[(mtu_ + IKCP_OVERHEAD) * 3];
 	if (!buffer_)
 		return -2;
 	mtu = mtu_;
@@ -773,23 +781,25 @@ int Kcp::setinterval(int interval_)
 	return 0;
 }
 
-int Kcp::set_nodelay(int nodelay_, int interval_, int resend_, int nc) {
+int Kcp::set_nodelay(int nodelay_, int interval_, int resend_, int nc_) {
 
 	if (nodelay_ >= 0) {
 		nodelay = nodelay_;
-		if (nodelay) {
+		if (nodelay_) {
 			rx_minrto = IKCP_RTO_NDL;
 		}
 		else {
 			rx_minrto = IKCP_RTO_MIN;
 		}
 	}
-	setinterval(interval_);
+	if (interval_ > 0) {
+		setinterval(interval_);
+	}
 	if (resend_ >= 0) {
 		fastresend = resend_;
 	}
-	if (nc >= 0) {
-		nocnwd = nc;
+	if (nc_ >= 0) {
+		nocnwd = nc_;
 	}
 	return 0;
 }
