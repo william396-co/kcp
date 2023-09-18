@@ -110,7 +110,7 @@ public:
 	Kcp& operator=(Kcp&&) = delete;
 
 	// set output callback, which will be invoked by kcp
-	void setOutput(OutputFn const& fn) {
+	void set_output(OutputFn const& fn) {
 		on_output_ = fn;
 	}
 
@@ -131,7 +131,7 @@ public:
 	// Important to reduce unnacessary ikcp_update invoking. use it to 
 	// schedule ikcp_update (eg. implementing an epoll-like mechanism, 
 	// or optimize ikcp_update when handling massive kcp connections)
-	uint32_t check(uint32_t current);
+	uint32_t check(uint32_t current_);
 
 	// when you received a low level packet (eg. UDP packet), call it
 	int input(const char* data, long size);

@@ -5,6 +5,7 @@
 #include <limits>
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 //=====================================================================
 // KCP BASIC
@@ -32,82 +33,90 @@ constexpr auto IKCP_PROBE_INIT = 7000;		// 7 secs to probe window size
 constexpr auto IKCP_PROBE_LIMIT = 120000;	// up to 120 secs to probe window
 constexpr auto IKCP_FASTACK_LIMIT = 5;		// max times to trigger fastack
 
-int32_t timediff(uint32_t later, uint32_t earlier) {
-	return (int32_t)(later - earlier);
-}
+namespace {
+	inline int32_t timediff(uint32_t later, uint32_t earlier) {
+		return (int32_t)(later - earlier);
+	}
 
+	/* encode 8 bits unsigned int */
+	inline char* ikcp_encode8u(char* p, unsigned char c)
+	{
+		*(unsigned char*)p++ = c;
+		return p;
+	}
 
-/* encode 8 bits unsigned int */
-char* ikcp_encode8u(char* p, unsigned char c)
-{
-	*(unsigned char*)p++ = c;
-	return p;
-}
+	/* decode 8 bits unsigned int */
+	const char* ikcp_decode8u(const char* p, unsigned char* c)
+	{
+		*c = *(unsigned char*)p++;
+		return p;
+	}
 
-/* decode 8 bits unsigned int */
-const char* ikcp_decode8u(const char* p, unsigned char* c)
-{
-	*c = *(unsigned char*)p++;
-	return p;
-}
-
-/* encode 16 bits unsigned int (lsb) */
-char* ikcp_encode16u(char* p, unsigned short w)
-{
+	/* encode 16 bits unsigned int (lsb) */
+	inline char* ikcp_encode16u(char* p, unsigned short w)
+	{
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
-	* (unsigned char*)(p + 0) = (w & 255);
-	*(unsigned char*)(p + 1) = (w >> 8);
+		* (unsigned char*)(p + 0) = (w & 255);
+		*(unsigned char*)(p + 1) = (w >> 8);
 #else
-	memcpy(p, &w, 2);
+		memcpy(p, &w, 2);
 #endif
-	p += 2;
-	return p;
-}
+		p += 2;
+		return p;
+	}
 
-/* decode 16 bits unsigned int (lsb) */
-const char* ikcp_decode16u(const char* p, unsigned short* w)
-{
+	/* decode 16 bits unsigned int (lsb) */
+	inline const char* ikcp_decode16u(const char* p, unsigned short* w)
+	{
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
-	* w = *(const unsigned char*)(p + 1);
-	*w = *(const unsigned char*)(p + 0) + (*w << 8);
+		* w = *(const unsigned char*)(p + 1);
+		*w = *(const unsigned char*)(p + 0) + (*w << 8);
 #else
-	memcpy(w, p, 2);
+		memcpy(w, p, 2);
 #endif
-	p += 2;
-	return p;
-}
+		p += 2;
+		return p;
+	}
 
-/* encode 32 bits unsigned int (lsb) */
-char* ikcp_encode32u(char* p, uint32_t l)
-{
+	/* encode 32 bits unsigned int (lsb) */	
+	inline	char* ikcp_encode32u(char* p, uint32_t l)
+	{
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
-	* (unsigned char*)(p + 0) = (unsigned char)((l >> 0) & 0xff);
-	*(unsigned char*)(p + 1) = (unsigned char)((l >> 8) & 0xff);
-	*(unsigned char*)(p + 2) = (unsigned char)((l >> 16) & 0xff);
-	*(unsigned char*)(p + 3) = (unsigned char)((l >> 24) & 0xff);
+		* (unsigned char*)(p + 0) = (unsigned char)((l >> 0) & 0xff);
+		*(unsigned char*)(p + 1) = (unsigned char)((l >> 8) & 0xff);
+		*(unsigned char*)(p + 2) = (unsigned char)((l >> 16) & 0xff);
+		*(unsigned char*)(p + 3) = (unsigned char)((l >> 24) & 0xff);
 #else
-	memcpy(p, &l, 4);
+		memcpy(p, &l, 4);
 #endif
-	p += 4;
-	return p;
-}
+		p += 4;
+		return p;
+	}
 
-/* decode 32 bits unsigned int (lsb) */
-inline const char* ikcp_decode32u(const char* p, uint32_t* l)
-{
+	/* decode 32 bits unsigned int (lsb) */
+	inline const char* ikcp_decode32u(const char* p, uint32_t* l)
+	{
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
-	* l = *(const unsigned char*)(p + 3);
-	*l = *(const unsigned char*)(p + 2) + (*l << 8);
-	*l = *(const unsigned char*)(p + 1) + (*l << 8);
-	*l = *(const unsigned char*)(p + 0) + (*l << 8);
+		* l = *(const unsigned char*)(p + 3);
+		*l = *(const unsigned char*)(p + 2) + (*l << 8);
+		*l = *(const unsigned char*)(p + 1) + (*l << 8);
+		*l = *(const unsigned char*)(p + 0) + (*l << 8);
 #else 
-	memcpy(l, p, 4);
+		memcpy(l, p, 4);
 #endif
-	p += 4;
-	return p;
+		p += 4;
+		return p;
+	}
+
+	inline uint32_t ibound(uint32_t lower, uint32_t middle, uint32_t upper) {
+		return std::min(std::max(lower, middle), upper);
+	}
 }
+
+
 
 void Kcp::write_log(int mask, const char* fmt, ...) {
+
 	if ((mask & logmask) == 0 || !on_write_log_)
 		return;
 
@@ -120,17 +129,27 @@ void Kcp::write_log(int mask, const char* fmt, ...) {
 }
 
 Kcp::Kcp(uint32_t conv_, void* user_)
-	:conv{ conv_ }, user{ user_ },
+	:conv{ conv_ }, mtu{ IKCP_MTU_DEF }, mss{ mtu - IKCP_OVERHEAD }, state{ 0 },
 	snd_una{ 0 }, snd_nxt{ 0 }, rcv_nxt{ 0 },
-	ts_recent{ 0 }, ts_lastack{ 0 },
-	ts_probe{ 0 }, probe_wait{ 0 }, snd_wnd{ IKCP_WND_SND }, rcv_wnd{ IKCP_WND_RCV }, rmt_wnd{ IKCP_WND_RCV },
-	cwnd{ 0 }, incr{ 0 }, probe{ 0 }, mtu{ IKCP_MTU_DEF }, mss{ mtu - IKCP_OVERHEAD }, stream{ 0 },
+	ts_recent{ 0 }, ts_lastack{ 0 }, ssthresh{ IKCP_THRESH_INIT },
+	rx_rttval{ 0 }, rx_srtt{ 0 }, rx_rto{ IKCP_RTO_DEF }, rx_minrto{ IKCP_RTO_MIN },
+	snd_wnd{ IKCP_WND_SND }, rcv_wnd{ IKCP_WND_RCV }, rmt_wnd{ IKCP_WND_RCV }, cwnd{ 0 }, probe{ 0 },
+	current{ 0 }, interval{ IKCP_INTERVAL }, ts_flush{ IKCP_INTERVAL }, xmit{ 0 },
+	nrcv_buf{ 0 }, nsnd_buf{ 0 },
+	nrcv_que{ 0 }, nsnd_que{ 0 },
+	nodelay{ 0 },
+	updated{ false },
+	ts_probe{ 0 }, probe_wait{ 0 },
+	dead_link{ IKCP_DEADLINK }, incr{ 0 },
+	acklist{ nullptr },
+	ackcount{ 0 },
+	ackblock{ 0 },
+	user{ user_ },
 	buffer{ nullptr },
-	nrcv_buf{ 0 }, nsnd_buf{ 0 }, nrcv_que{ 0 }, nsnd_que{ 0 }, state{ 0 }, acklist{ nullptr },
-	ackblock{ 0 }, ackcount{ 0 }, rx_srtt{ 0 }, rx_rttval{ 0 }, rx_rto{ IKCP_RTO_DEF },
-	rx_minrto{ IKCP_RTO_MIN }, current{ 0 }, interval{ IKCP_INTERVAL },
-	ts_flush{ IKCP_INTERVAL }, nodelay{ 0 }, updated{ false }, logmask{ 0 }, ssthresh{ IKCP_THRESH_INIT },
-	fastresend{ 0 }, fastlimit{ IKCP_FASTACK_LIMIT }, nocnwd{ 0 }, xmit{ 0 }, dead_link{ IKCP_DEADLINK }
+	fastresend{ 0 },
+	fastlimit{ IKCP_FASTACK_LIMIT },
+	nocnwd{ 0 }, stream{ 0 },
+	logmask{ 0 }
 {
 	buffer = new char[mtu + IKCP_OVERHEAD * 3];
 	if (!buffer) {
@@ -686,8 +705,8 @@ uint32_t Kcp::check(uint32_t current) {
 	uint32_t ts_flush_ = ts_flush;
 
 	if (timediff(current, ts_flush_) >= 10000 ||
-		timediff(current, ts_flush_ < -10000)) {
-		ts_flush_ = current;
+		timediff(current, ts_flush_) < -10000) {
+			ts_flush_ = current;
 	}
 
 	if (timediff(current, ts_flush_) >= 0) {
@@ -921,8 +940,7 @@ void Kcp::update_ack(int32_t rtt_)
 		if (rx_srtt < 1) rx_srtt = 1;
 	}
 	rto_ = rx_srtt + std::max((int32_t)interval, 4 * rx_rttval);
-
-	//rx_rto = std::lower_bound() TODO
+	rx_rto = ibound(rx_minrto, rto_, IKCP_RTO_MAX);
 }
 
 void Kcp::shrink_buf()

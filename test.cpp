@@ -12,12 +12,17 @@
 
 #include "test.h"
 
-#include "kcp.h"
-
 #define BUFF_LEN 2000
 #define TEST_CNT 1000
 
 #define USE_CPP_VERSION
+
+#ifndef USE_CPP_VERSION
+#include "ikcp.h"
+#else
+#include "kcp.h"
+#endif // !USE_CPP_VERSION
+
 
 // 模拟网络
 LatencySimulator *vnet;
@@ -66,8 +71,8 @@ void test(int mode)
 	kcp1->output = udp_output;
 	kcp2->output = udp_output;
 #else
-	kcp1->setOutput(udp_output);
-	kcp2->setOutput(udp_output);
+	kcp1->set_output(udp_output);
+	kcp2->set_output(udp_output);
 #endif
 
 	IUINT32 current = iclock();
@@ -154,7 +159,7 @@ void test(int mode)
 
 			// 发送上层协议包
 #ifndef USE_CPP_VERSION
-			ikcp_send(kcp1, buffer, rand() % BUFF_LEN);
+			ikcp_send(kcp1, buffer, BUFF_LEN);
 #else
 			kcp1->send(buffer, BUFF_LEN);
 

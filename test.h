@@ -92,7 +92,8 @@ public:
 		_ptr = NULL;
 	}
 
-	DelayPacket(int size, const void *src = NULL) {
+	explicit DelayPacket(int size, const void* src = NULL) 
+		: _ptr{ nullptr }, _size{ 0 }, _ts{ 0 } {
 		_ptr = new unsigned char[size];
 		_size = size;
 		if (src) {
