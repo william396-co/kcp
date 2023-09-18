@@ -12,13 +12,19 @@
 
 #include "test.h"
 
+#include "kcp.h"
+
 #define BUFF_LEN 2000
 #define TEST_CNT 1000
+
+#define USE_CPP_VERSION
 
 // 模拟网络
 LatencySimulator *vnet;
 
 // 模拟网络：模拟发送一个 udp包
+#ifndef USE_CPP_VERSION
+
 int udp_output(const char *buf, int len, ikcpcb *kcp, void *user)
 {
 	union { int id; void *ptr; } parameter;
@@ -26,6 +32,17 @@ int udp_output(const char *buf, int len, ikcpcb *kcp, void *user)
 	vnet->send(parameter.id, buf, len);
 	return 0;
 }
+
+#else
+int udp_output(const char* buf, int len, Kcp* kcp, void* user) {
+
+	union { int id; void* ptr; } parameter;
+	parameter.ptr = user;
+	vnet->send(parameter.id, buf, len);
+	return 0;
+}
+
+#endif // !USE_CPP_VERSION
 
 // 测试用例
 void test(int mode)
@@ -35,12 +52,23 @@ void test(int mode)
 
 	// 创建两个端点的 kcp对象，第一个参数 conv是会话编号，同一个会话需要相同
 	// 最后一个是 user参数，用来传递标识
+#ifndef USE_CPP_VERSION
 	ikcpcb *kcp1 = ikcp_create(0x11223344, (void*)0);
-	ikcpcb *kcp2 = ikcp_create(0x11223344, (void*)1);
+	ikcpcb* kcp2 = ikcp_create(0x11223344, (void*)1);
+#else
+	Kcp* kcp1 = new Kcp(0x11223344, (void*)0);
+	Kcp* kcp2 = new Kcp(0x11223344, (void*)1);
+#endif // !USE_CPP_VERSION	
+
 
 	// 设置kcp的下层输出，这里为 udp_output，模拟udp网络输出函数
+#ifndef USE_CPP_VERSION
 	kcp1->output = udp_output;
 	kcp2->output = udp_output;
+#else
+	kcp1->setOutput(udp_output);
+	kcp2->setOutput(udp_output);
+#endif
 
 	IUINT32 current = iclock();
 	IUINT32 slap = current + 20;
@@ -52,29 +80,53 @@ void test(int mode)
 
 	// 配置窗口大小：平均延迟200ms，每20ms发送一个包，
 	// 而考虑到丢包重发，设置最大收发窗口为128
+#ifndef  USE_CPP_VERSION
 	ikcp_wndsize(kcp1, 128, 128);
 	ikcp_wndsize(kcp2, 128, 128);
+#else
+	kcp1->set_wndsize(128, 128);
+	kcp2->set_wndsize(128, 128);
+#endif // ! USE_CPP_VERSION
+
 
 	// 判断测试用例的模式
 	if (mode == 0) {
 		// 默认模式
+#ifndef USE_CPP_VERSION
 		ikcp_nodelay(kcp1, 0, 10, 0, 0);
 		ikcp_nodelay(kcp2, 0, 10, 0, 0);
+#else
+		kcp1->set_nodelay(0, 10, 0, 0);
+		kcp2->set_nodelay(0, 10, 0, 0);
+#endif // !USE_CPP_VERSION
 	}
 	else if (mode == 1) {
 		// 普通模式，关闭流控等
+#ifndef USE_CPP_VERSION
 		ikcp_nodelay(kcp1, 0, 10, 0, 1);
 		ikcp_nodelay(kcp2, 0, 10, 0, 1);
+#else
+		kcp1->set_nodelay(0, 10, 0, 1);
+		kcp2->set_nodelay(0, 10, 0, 1);
+#endif // !USE_CPP_VERSION
 	}	else {
 		// 启动快速模式
 		// 第二个参数 nodelay-启用以后若干常规加速将启动
 		// 第三个参数 interval为内部处理时钟，默认设置为 10ms
 		// 第四个参数 resend为快速重传指标，设置为2
 		// 第五个参数 为是否禁用常规流控，这里禁止
+#ifndef USE_CPP_VERSION
 		ikcp_nodelay(kcp1, 2, 10, 2, 1);
 		ikcp_nodelay(kcp2, 2, 10, 2, 1);
 		kcp1->rx_minrto = 10;
 		kcp1->fastresend = 1;
+#else
+		kcp1->set_nodelay(2, 10, 2, 1);
+		kcp2->set_nodelay(2, 10, 2, 1);		
+		kcp1->set_rx_minrto(10);
+		kcp1->set_fastresend(1);
+
+#endif // !USE_CPP_VERSION
 	}
 
 
@@ -86,8 +138,14 @@ void test(int mode)
 	while (1) {
 		isleep(1);
 		current = iclock();
+#ifndef USE_CPP_VERSION
 		ikcp_update(kcp1, iclock());
 		ikcp_update(kcp2, iclock());
+#else
+		kcp1->update(iclock());
+		kcp2->update(iclock());
+#endif // !USE_CPP_VERSION
+		
 
 		// 每隔 20ms，kcp1发送数据
 		for (; current >= slap; slap += 20) {
@@ -95,7 +153,12 @@ void test(int mode)
 			((IUINT32*)buffer)[1] = current;
 
 			// 发送上层协议包
-			ikcp_send(kcp1, buffer, rand()%BUFF_LEN);
+#ifndef USE_CPP_VERSION
+			ikcp_send(kcp1, buffer, rand() % BUFF_LEN);
+#else
+			kcp1->send(buffer, BUFF_LEN);
+
+#endif // !USE_CPP_VERSION
 		}
 
 		// 处理虚拟网络：检测是否有udp包从p1->p2
@@ -103,7 +166,11 @@ void test(int mode)
 			len = vnet->recv(1, buffer, BUFF_LEN);
 			if (len < 0) break;
 			// 如果 p2收到udp，则作为下层协议输入到kcp2
+#ifndef USE_CPP_VERSION
 			ikcp_input(kcp2, buffer, len);
+#else
+			kcp2->input(buffer, len);
+#endif
 		}
 
 		// 处理虚拟网络：检测是否有udp包从p2->p1
@@ -111,21 +178,37 @@ void test(int mode)
 			len = vnet->recv(0, buffer, BUFF_LEN);
 			if (len < 0) break;
 			// 如果 p1收到udp，则作为下层协议输入到kcp1
+#ifndef USE_CPP_VERSION
 			ikcp_input(kcp1, buffer, len);
+#else
+			kcp1->input(buffer, len);
+#endif // !USE_CPP_VERSION
 		}
 
 		// kcp2接收到任何包都返回回去
 		while (1) {
+#ifndef USE_CPP_VERSION
 			len = ikcp_recv(kcp2, buffer, BUFF_LEN);
+#else
+			kcp2->recv(buffer, BUFF_LEN);
+#endif // !USE_CPP_VERSION
 			// 没有收到包就退出
 			if (len < 0) break;
 			// 如果收到包就回射
+#ifndef USE_CPP_VERSION
 			ikcp_send(kcp2, buffer, len);
+#else
+			kcp2->send(buffer, len);
+#endif // !USE_CPP_VERSION
 		}
 
 		// kcp1收到kcp2的回射数据
 		while (1) {
+#ifndef USE_CPP_VERSION
 			len = ikcp_recv(kcp1, buffer, BUFF_LEN);
+#else
+			len = kcp1->recv(buffer, BUFF_LEN);
+#endif // !USE_CPP_VERSION
 			// 没有收到包就退出
 			if (len < 0) break;
 			IUINT32 sn = *(IUINT32*)(buffer + 0);
@@ -150,8 +233,13 @@ void test(int mode)
 
 	ts1 = iclock() - ts1;
 
+#ifndef USE_CPP_VERSION
 	ikcp_release(kcp1);
 	ikcp_release(kcp2);
+#else
+	delete kcp1;
+	delete kcp2;
+#endif // !USE_CPP_VERSION
 
 	const char *names[3] = { "default", "normal", "fast" };
 	printf("%s mode result (%dms):\n", names[mode], (int)ts1);

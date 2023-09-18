@@ -56,11 +56,14 @@ struct kcpSeg
 	uint32_t xmit;
 	char* data;
 
-	explicit kcpSeg(int size, uint32_t conv_, uint32_t cmd_, uint32_t frg_, uint32_t wnd_, uint32_t ts_, uint32_t una_) :
+	explicit kcpSeg(int size) :
+		kcpSeg(size, 0, 0, 0, 0, 0, 0) {}
+
+	kcpSeg(int size, uint32_t conv_, uint32_t cmd_, uint32_t frg_, uint32_t wnd_, uint32_t ts_, uint32_t una_) :
 		conv{ conv_ }, cmd{ cmd_ }, frg{ frg_ },
 		wnd{ wnd_ }, ts{ ts_ }, sn{ 0 }, una{ una_ },
-		len{ size }, resendts{ 0 }, rto{ 0 },
-		fastack{ 0 }, xmit{ 0 }
+		len{ (uint32_t)size }, resendts{ 0 }, rto{ 0 },
+		fastack{ 0 }, xmit{ 0 },data{nullptr}
 	{
 		if (len > 0) {
 			data = new char[size];
@@ -112,9 +115,9 @@ public:
 	}
 
 	// user/upper level recv: returns size, returns below zero for EAGAIN
-	int recv(char* buffer, int len);
+	int recv(char* buffer_, int len_);
 	// user/upper level send, returns below zero for error
-	int send(const char* data, int len);
+	int send(const char* data_, int len_);
 
 	// update state (call it repeatedly, every 10ms-100ms), or you can ask 
 	// ikcp_check when to call it again (without ikcp_input/_send calling).
@@ -148,7 +151,9 @@ public:
 	// resend: 0:disable fast resend(default), 1:enable fast resend
 	// nc: 0:normal congestion control(default), 1:disable congestion control
 	int set_nodelay(int nodelay_, int interval_, int resend_, int nc);
-
+public:
+	void set_rx_minrto(int rx_minrto_) { rx_minrto = rx_minrto_; }
+	void set_fastresend(int fastresend_) { fastresend = fastresend_; }
 private:
 	// check the size of next message in the recv queue
 	int peeksize();
