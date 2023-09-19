@@ -115,9 +115,9 @@ public:
 	}
 
 	// user/upper level recv: returns size, returns below zero for EAGAIN
-	int recv(char* buffer_, int len_);
+	int recv(char* data_, int len_);
 	// user/upper level send, returns below zero for error
-	int send(const char* buffer_, int len_);
+	int send(const char* data_, int len_);
 
 	// update state (call it repeatedly, every 10ms-100ms), or you can ask 
 	// ikcp_check when to call it again (without ikcp_input/_send calling).
@@ -161,47 +161,30 @@ public:
 	void set_rx_minrto(int rx_minrto_) { rx_minrto = rx_minrto_; }
 	void set_fastresend(int fastresend_) { fastresend = fastresend_; }
 private:	
-	void write_log(int mask, const char* fmt, ...);
-
-	int setinterval(int interval_);
-
-	int output(const char* data_, int size_);
-
 	// check log mask
 	bool canlog(int mask_);
-	//---------------------------------------------------------------------
-	// ikcp_encode_seg
-	//---------------------------------------------------------------------
-	char* encode_seg(char* ptr_, const kcpSeg* seg_);
+	void write_log(int mask, const char* fmt, ...);
+	int output(const char* data_, int size_);
 
-	int wnd_unused();
+	// send function 
+	void ack_push(uint32_t sn_, uint32_t ts_);// input() send back
+	void ack_get(int p, uint32_t* sn_, uint32_t* ts_);// flush() send 
+	// left recv window size
+	int wnd_unused();// flush() seg wnd information
 
-	//---------------------------------------------------------------------
-	// ack append
-	//---------------------------------------------------------------------
-	void ack_push(uint32_t sn_, uint32_t ts_);
+	// recv function
+	void parse_data(kcpSeg* newseg_);// input() call
+	void parse_ack(uint32_t sn_);// input() call
+	void parse_una(uint32_t una_); // input() call
+	void update_ack(int32_t rtt_); // input() call
+	void shrink_buf(); // input() call
+	void parse_fastack(uint32_t sn_, uint32_t ts_);// input() call
 
-	void ack_get(int p, uint32_t* sn_, uint32_t* ts_);
-
-	//---------------------------------------------------------------------
-	// parse data
-	//---------------------------------------------------------------------
-	void parse_data(kcpSeg* newseg_);
- 
-	//---------------------------------------------------------------------
-	// parse ack
-	//---------------------------------------------------------------------
-	void update_ack(int32_t rtt_);
-
-	void shrink_buf();
-
-	void parse_ack(uint32_t sn_);
-
-	void parse_una(uint32_t una_);
-
-	void parse_fastack(uint32_t sn_, uint32_t ts_);
-
+	// some other function
+	int setinterval(int interval_);
 	bool valide_cmd(uint8_t cmd_);
+	char* encode_seg(char* ptr_, const kcpSeg* seg_); // flush() encode segment head
+	//const char* decode_seg(const char* ptr_, kcpSeg* seg_); // input() decode segment head
 private:
 	uint32_t conv, mtu, mss, state;
 	uint32_t snd_una, snd_nxt, rcv_nxt;

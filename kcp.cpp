@@ -151,7 +151,7 @@ Kcp::Kcp(uint32_t conv_, void* user_)
 	nocnwd{ 0 }, stream{ 0 },
 	logmask{ 0 }
 {
-	buffer = new char[mtu + IKCP_OVERHEAD * 3];
+	buffer = new char[(mtu + IKCP_OVERHEAD) * 3];
 	if (!buffer) {
 		throw std::runtime_error("Kcp Buffer allocater failed");
 	}
@@ -159,19 +159,20 @@ Kcp::Kcp(uint32_t conv_, void* user_)
 
 Kcp::~Kcp()
 {
+	while (!snd_queue.empty()) {
+		auto seg = snd_queue.front();
+		snd_queue.pop_front();
+		delete seg;
+	}
 	while (!snd_buf.empty()) {
 		auto seg = snd_buf.front();
 		snd_buf.pop_front();
 		delete seg;
 	}
+
 	while (!rcv_buf.empty()) {
 		auto seg = rcv_buf.front();
 		rcv_buf.pop_front();
-		delete seg;
-	}
-	while (!snd_queue.empty()) {
-		auto seg = snd_queue.front();
-		snd_queue.pop_front();
 		delete seg;
 	}
 	while (!rcv_queue.empty()) {
@@ -188,21 +189,21 @@ Kcp::~Kcp()
 //---------------------------------------------------------------------
 // user/upper level recv: returns size, returns below zero for EAGAIN
 //---------------------------------------------------------------------
-int Kcp::recv(char* buffer_, int len_) {
+int Kcp::recv(char* data_, int len_) {
 
-	if (rcv_queue.empty())return-1;
+	if (rcv_queue.empty()) { return -1; }
 
 	bool ispeek = (len_ < 0) ? true : false;
 	bool recover = false;
 
-	if (len_ < 0)len_ = -len_;
+	if (len_ < 0) len_ = -len_;
 
 	int peeksize_ = peeksize();
 	if (peeksize_ < 0) {
 		return -2;
 	}
 	if (peeksize_ > len_) {
-		return-3;
+		return -3;
 	}
 
 	if (nrcv_que >= rcv_wnd) {
@@ -216,9 +217,9 @@ int Kcp::recv(char* buffer_, int len_) {
 		auto seg = *it;
 		int frg_;
 
-		if (buffer_) {
-			memcpy(buffer_, seg->data, seg->len);
-			buffer_ += seg->len;
+		if (data_) {
+			memcpy(data_, seg->data, seg->len);
+			data_ += seg->len;
 		}
 		len_ += seg->len;
 		frg_ = seg->frg;
@@ -227,16 +228,15 @@ int Kcp::recv(char* buffer_, int len_) {
 			write_log(log_Recv, "recv sn=%lu", seg->sn);
 		}
 
-		if (ispeek) {
+		if (!ispeek) {
 			delete seg;
 			it = rcv_queue.erase(it);
 			nrcv_que--;
 		}
-		else {
-			++it;
-		}
 
-		if (frg_ == 0)break;
+		if (frg_ == 0) break;
+
+		++it;
 	}
 
 	assert(len_ == peeksize_);
@@ -268,7 +268,7 @@ int Kcp::recv(char* buffer_, int len_) {
 //---------------------------------------------------------------------
 // user/upper level send, returns below zero for error
 //---------------------------------------------------------------------
-int Kcp::send(const char* buffer_, int len_)
+int Kcp::send(const char* data_, int len_)
 {
 	assert(mss > 0);
 	if (len_ < 0) { 
@@ -286,18 +286,18 @@ int Kcp::send(const char* buffer_, int len_)
 			if ((*old)->len < mss) {
 				int cap = mss - (*old)->len;
 				int extend = (len_ < cap) ? len_ : cap;
-				seg = new kcpSeg((*old)->len + extend, conv, (*old)->cmd, 0, (*old)->wnd, (*old)->ts, (*old)->una);
+				seg = new kcpSeg((*old)->len + extend);
 				assert(seg);
 				if (!seg) {
 					return -2;
 				}
 				snd_queue.push_back(seg);
 				memcpy(seg->data, (*old)->data, (*old)->len);
-				if (buffer_) {
-					memcpy(seg->data + (*old)->len, buffer_, extend);
-					buffer_ += extend;
+				if (data_) {
+					memcpy(seg->data + (*old)->len, data_, extend);
+					data_ += extend;
 				}
-				seg->frg = 0;
+				seg->frg = 0;//?
 				len_ -= extend;
 				delete *old;
 				snd_queue.erase(old);
@@ -333,48 +333,49 @@ int Kcp::send(const char* buffer_, int len_)
 			return -2;
 		}
 
-		if (buffer_ && len_ > 0) {
-			memcpy(seg->data, buffer_, size);
+		if (data_ && len_ > 0) {
+			memcpy(seg->data, data_, size);
 		}
 		seg->frg = stream == 0 ? (count - i - 1) : 0;
 		snd_queue.push_back(seg);
 		nsnd_que++;
-		if (buffer_) {
-			buffer_ += size;
+		if (data_) {
+			data_ += size;
 		}
 		len_ -= size;
 		sent += size;
 	}
 
-	return 0;
+	return sent;
 }
 
 /* flush */
 void Kcp::flush()
 {
-	if (!updated)return;
+	// update haven't been called
+	if (!updated) return;
 
-	kcpSeg seg{ 0,conv,IKCP_CMD_ACK,0,(uint32_t)wnd_unused(),0,rcv_nxt };
-
-	char* buffer_ = buffer;
-	char* ptr_ = buffer;
+	char* start_ = buffer;// start ptr
+	char* curr_ptr_ = buffer; // current ptr
 	auto current_ = current;
 
+	kcpSeg seg{ 0,conv,IKCP_CMD_ACK,0,(uint32_t)wnd_unused(),0,rcv_nxt };
 
 	// flush acknowledges
 	int count = ackcount;
 	int size = 0;
 	for (int i = 0; i != count; ++i) {
-		size = int(ptr_ - buffer_);
+		size = int(curr_ptr_ - start_);
 		if (size + IKCP_OVERHEAD > (int)mtu) {
-			output(buffer_, size);
-			ptr_ = buffer_;
+			output(start_, size);
+			curr_ptr_ = start_;//reset current_ptr
 		}
-		ack_get(i, &seg.sn, &seg.ts);
-		ptr_ = encode_seg(ptr_, &seg);
+		ack_get(i, &seg.sn, &seg.ts);// fill ack data 
+		curr_ptr_ = encode_seg(curr_ptr_, &seg);// encode and current_ptr move forward
 	}
 
 	ackcount = 0;
+
 	//probe window size(if remote window size equals zero)
 	if (rmt_wnd == 0) {
 		if (probe_wait == 0) {
@@ -401,23 +402,23 @@ void Kcp::flush()
 	// flush window probing commands
 	if (probe & IKCP_ASK_SEND) {
 		seg.cmd = IKCP_CMD_WASK;
-		size = (int)(ptr_ - buffer_);
-		if (size + (int)IKCP_OVERHEAD > (int)mtu) {
-			output(buffer_, size);
-			ptr_ = buffer_;
+		size = (int)(curr_ptr_ - start_);
+		if (size + IKCP_OVERHEAD > (int)mtu) {
+			output(start_, size);
+			curr_ptr_ = start_;//reset 
 		}
-		ptr_ = encode_seg(ptr_, &seg);
+		curr_ptr_ = encode_seg(curr_ptr_, &seg);// encode and current_ptr move forward
 	}
 
 	// flush window probing commands
 	if (probe & IKCP_ASK_TELL) {
 		seg.cmd = IKCP_CMD_WINS;
-		size = (int)(ptr_ - buffer_);
-		if (size + (int)IKCP_OVERHEAD > (int)mtu) {
-			output(buffer_, size);
-			ptr_ = buffer_;
+		size = (int)(curr_ptr_ - start_);
+		if (size + IKCP_OVERHEAD > (int)mtu) {
+			output(start_, size);
+			curr_ptr_ = start_; // reset
 		}
-		ptr_ = encode_seg(ptr_, &seg);
+		curr_ptr_ = encode_seg(curr_ptr_, &seg);// encode and current_ptr move forward
 	}
 
 	probe = 0;
@@ -426,8 +427,6 @@ void Kcp::flush()
 	if (nocnwd == 0)
 		cwnd_ = std::min(cwnd, cwnd_);
 
-	// calculate resent
-	uint32_t resent_, rtomin_;
 
 	// move data from snd_queue to snd_buf
 	while (timediff(snd_nxt, snd_una + cwnd_) < 0)
@@ -453,10 +452,10 @@ void Kcp::flush()
 		newseg->fastack = 0;
 		newseg->xmit = 0;
 	}
-
+		
 	// calculate resent
-	resent_ = (fastresend > 0) ? fastresend : 0xffffffff;
-	rtomin_ = (nodelay == 0) ? (rx_rto >> 3) : 0;
+	uint32_t resent_ = (fastresend > 0) ? (uint32_t)fastresend : UINT32_MAX;
+	uint32_t rtomin_ = (nodelay == 0) ? (rx_rto >> 3) : 0;
 
 	bool lost = false;
 	bool change = false;
@@ -500,18 +499,19 @@ void Kcp::flush()
 			segment->wnd = seg.wnd;
 			segment->una = rcv_nxt;
 
-			size = (int)(ptr_ - buffer_);
-			need = IKCP_OVERHEAD + segment->len;
+			size = (int)(curr_ptr_ - start_);
+			need = IKCP_OVERHEAD + (int)segment->len;
 
 			if (size + need > (int)mtu) {
-				output(buffer_, size);
-				ptr_ = buffer_;
+				output(start_, size);
+				curr_ptr_ = start_;//reset current_ptr
 			}
 
-			ptr_ = encode_seg(ptr_, segment);
+			curr_ptr_ = encode_seg(curr_ptr_, segment);
+
 			if (segment->len > 0) {
-				memcpy(ptr_, segment->data, segment->len);
-				ptr_ += segment->len;
+				memcpy(curr_ptr_, segment->data, segment->len);
+				curr_ptr_ += segment->len;// current_ptr move forward
 			}
 
 			if (segment->xmit >= dead_link) {
@@ -521,9 +521,9 @@ void Kcp::flush()
 	}
 
 	// flash remain segments
-	size = (int)(ptr_ - buffer_);
+	size = (int)(curr_ptr_ - start_);
 	if (size > 0) {
-		output(buffer_, size);
+		output(start_, size);
 	}
 
 	// update ssthresh
@@ -564,8 +564,8 @@ int Kcp::input(const char* data_, long size_) {
 
 	uint32_t prev_una = snd_una;
 	uint32_t maxack = 0, latest_ts = 0;
-
 	bool flag = false;
+
 	while (true) {
 		uint32_t ts_, sn_, len_, una_, conv_;
 		uint16_t wnd_;
@@ -576,7 +576,7 @@ int Kcp::input(const char* data_, long size_) {
 
 		data_ = ikcp_decode32u(data_, &conv_);
 		if (conv_ != conv) {
-			return-1;
+			return -1;
 		}
 
 		data_ = ikcp_decode8u(data_, &cmd_);
@@ -589,9 +589,11 @@ int Kcp::input(const char* data_, long size_) {
 
 		size_ -= IKCP_OVERHEAD;
 
-		if ((long)size_ < (long)len_ || (int)len_ < 0)return -2;
+		if ((long)size_ < (long)len_ || (int)len_ < 0) {
+			return -2;
+		}
 
-		if (!valide_cmd(cmd_)) { return-3; }
+		if (!valide_cmd(cmd_)) { return -3; }
 
 		rmt_wnd = wnd_;
 		parse_una(una_);
@@ -633,11 +635,13 @@ int Kcp::input(const char* data_, long size_) {
 			}
 			if (timediff(sn_, rcv_nxt + rcv_wnd) < 0) {
 				ack_push(sn_, ts_);
-				seg = new kcpSeg(len_, conv, cmd_, frg_, wnd_, ts_, una_);
-				if (len_) {
-					memcpy(seg->data, data_, len_);
+				if (timediff(sn_, rcv_nxt) >= 0) {
+					seg = new kcpSeg(len_, conv, cmd_, frg_, wnd_, ts_, una_);
+					if (len_) {
+						memcpy(seg->data, data_, len_);
+					}
+					parse_data(seg);
 				}
-				parse_data(seg);
 			}
 			break;
 		case IKCP_CMD_WASK:
@@ -674,8 +678,7 @@ int Kcp::input(const char* data_, long size_) {
 				incr += mss_;
 			}
 			else {
-				if (incr < mss_)
-					incr = mss_;
+				if (incr < mss_) incr = mss_;
 				incr += (mss_ * mss_) / incr + (mss_ / 16);
 				if ((cwnd + 1) * mss_ <= incr) {
 #if 1
@@ -768,22 +771,23 @@ uint32_t Kcp::check(uint32_t current_) {
 
 	return current_ + minimal;
 }
-
-/* peek data size */
+//---------------------------------------------------------------------
+// peek data size
+//---------------------------------------------------------------------
 int Kcp::peeksize()
 {
 	if (rcv_queue.empty())
 		return -1;
 
-	auto p = rcv_queue.begin();
-	if ((*p)->frg == 0)return (*p)->len;
+	auto seg = rcv_queue.front();
+	if (seg->frg == 0)return seg->len;
 
-	if (nrcv_que < (*p)->frg + 1)return -1;
+	if (nrcv_que < seg->frg + 1)return -1;
 
 	int len_ = 0;
-	for (; p != rcv_queue.end(); ++p) {
+	for (auto p = rcv_queue.begin(); p != rcv_queue.end(); ++p) {
 		len_ += (*p)->len;
-		if ((*p)->frg == 0)break;
+		if ((*p)->frg == 0) break;
 	}
 	return len_;
 }
@@ -852,7 +856,24 @@ bool Kcp::canlog(int mask) {
 
 int Kcp::waitsnd() {
 	return nsnd_buf + nsnd_que;
+	//return int(snd_buf.size() + snd_queue.size());
 }
+
+/*
+const char* Kcp::decode_seg(const char* ptr_, kcpSeg* seg_)
+{
+	ptr_ = ikcp_decode32u(ptr_, &seg_->conv);
+	//if (seg_->conv != conv) return -1;
+
+	ptr_ = ikcp_decode8u(ptr_, (uint8_t)seg_->cmd);
+	ptr_ = ikcp_decode8u(ptr_, &(uint8_t)seg_->frg);
+	ptr_ = ikcp_decode16u(ptr_, &(uint16_t)seg_->wnd);
+	ptr_ = ikcp_decode32u(ptr_, &seg_->ts);
+	ptr_ = ikcp_decode32u(ptr_, &seg_->sn);
+	ptr_ = ikcp_decode32u(ptr_, &seg_->una);
+	ptr_ = ikcp_decode32u(ptr_, &seg_->len);
+	return ptr_;
+}*/
 
 char* Kcp::encode_seg(char* ptr_, const kcpSeg* seg_)
 {
@@ -1003,7 +1024,7 @@ void Kcp::parse_ack(uint32_t sn_)
 	if (timediff(sn_, snd_una) < 0 || timediff(sn_, snd_nxt) >= 0)
 		return;
 
-	for (auto it = snd_buf.begin(); it != snd_buf.end(); ++it) {
+	for (auto it = snd_buf.begin(); it != snd_buf.end();) {
 		if (sn_ == (*it)->sn) {
 			delete (*it);
 			it = snd_buf.erase(it);
@@ -1013,6 +1034,7 @@ void Kcp::parse_ack(uint32_t sn_)
 		if (timediff(sn_, (*it)->sn) < 0) {
 			break;
 		}
+		++it;
 	}
 }
 
@@ -1025,7 +1047,7 @@ void Kcp::parse_una(uint32_t una_)
 			nsnd_buf--;
 		}
 		else {
-			++it;
+			break;
 		}
 	}
 }
