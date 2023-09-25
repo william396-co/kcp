@@ -156,7 +156,11 @@ public:
 	// interval: internal update timer interval in millisec, default is 100ms 
 	// resend: 0:disable fast resend(default), 1:enable fast resend
 	// nc: 0:normal congestion control(default), 1:disable congestion control
-	int set_nodelay(int nodelay_, int interval_, int resend_, int nc_);
+	int set_nodelay(bool nodelay_, int interval_, int resend_, int nc_);
+
+	// Lost rate reference function
+	uint32_t get_resend_cnt()const { return resend_cnt; }
+	uint32_t get_total_cnt()const { return snd_nxt; }
 public:
 	void set_rx_minrto(int rx_minrto_) { rx_minrto = rx_minrto_; }
 	void set_fastresend(int fastresend_) { fastresend = fastresend_; }
@@ -194,7 +198,7 @@ private:
 	uint32_t current, interval, ts_flush, xmit;
 	uint32_t nrcv_buf, nsnd_buf;
 	uint32_t nrcv_que, nsnd_que;
-	uint32_t nodelay;
+	bool nodelay;
 	bool updated;
 	uint32_t ts_probe, probe_wait;
 	uint32_t dead_link, incr;
@@ -214,7 +218,7 @@ private:
 	int fastlimit;
 	int nocnwd, stream;
 	int logmask;
-
+	uint32_t resend_cnt;
 	OutputFn on_output_{};
 	WriteLogFn on_write_log_{};
 };

@@ -302,6 +302,9 @@ void ikcp_release(ikcpcb *kcp)
 {
 	assert(kcp);
 	if (kcp) {
+
+		printf("LOST RATE:%.5f", (double)kcp->resend_cnt / kcp->snd_nxt);
+
 		IKCPSEG *seg;
 		while (!iqueue_is_empty(&kcp->snd_buf)) {
 			seg = iqueue_entry(kcp->snd_buf.next, IKCPSEG, node);
@@ -1101,6 +1104,10 @@ void ikcp_flush(ikcpcb *kcp)
 				ptr = buffer;
 			}
 
+			if (segment->xmit > 1) {
+				ikcp_resend_inc(kcp);
+			}
+
 			ptr = ikcp_encode_seg(ptr, segment);
 
 			if (segment->len > 0) {
@@ -1301,6 +1308,12 @@ IUINT32 ikcp_getconv(const void *ptr)
 	IUINT32 conv;
 	ikcp_decode32u((const char*)ptr, &conv);
 	return conv;
+}
+
+void ikcp_resend_inc(ikcpcb* kcp) {
+	if (kcp) {
+		++kcp->resend_cnt;
+	}
 }
 
 

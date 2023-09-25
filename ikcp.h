@@ -312,6 +312,7 @@ struct IKCPCB
 	int fastlimit;
 	int nocwnd, stream;
 	int logmask;
+	int resend_cnt;
 	int (*output)(const char *buf, int len, struct IKCPCB *kcp, void *user);
 	void (*writelog)(const char *log, struct IKCPCB *kcp, void *user);
 };
@@ -405,6 +406,10 @@ void ikcp_allocator(void* (*new_malloc)(size_t), void (*new_free)(void*));
 
 // read conv
 IUINT32 ikcp_getconv(const void *ptr);
+
+// increment resend count
+void ikcp_resend_inc(ikcpcb* kcp);
+
 
 
 #ifdef __cplusplus

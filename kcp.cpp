@@ -137,7 +137,7 @@ Kcp::Kcp(uint32_t conv_, void* user_)
 	current{ 0 }, interval{ IKCP_INTERVAL }, ts_flush{ IKCP_INTERVAL }, xmit{ 0 },
 	nrcv_buf{ 0 }, nsnd_buf{ 0 },
 	nrcv_que{ 0 }, nsnd_que{ 0 },
-	nodelay{ 0 },
+	nodelay{ false },
 	updated{ false },
 	ts_probe{ 0 }, probe_wait{ 0 },
 	dead_link{ IKCP_DEADLINK }, incr{ 0 },
@@ -149,7 +149,7 @@ Kcp::Kcp(uint32_t conv_, void* user_)
 	fastresend{ 0 },
 	fastlimit{ IKCP_FASTACK_LIMIT },
 	nocnwd{ 0 }, stream{ 0 },
-	logmask{ 0 }
+	logmask{ 0 },resend_cnt{0}
 {
 	buffer = new char[(mtu + IKCP_OVERHEAD) * 3];
 	if (!buffer) {
@@ -455,7 +455,7 @@ void Kcp::flush()
 		
 	// calculate resent
 	uint32_t resent_ = (fastresend > 0) ? (uint32_t)fastresend : UINT32_MAX;
-	uint32_t rtomin_ = (nodelay == 0) ? (rx_rto >> 3) : 0;
+	uint32_t rtomin_ = (nodelay == false) ? (rx_rto >> 3) : 0;
 
 	bool lost = false;
 	bool change = false;
@@ -473,12 +473,13 @@ void Kcp::flush()
 			needsend = true;
 			segment->xmit++;
 			xmit++;
-			if (nodelay == 0) {
+			if (!nodelay) {
 				segment->rto += std::max(segment->rto, (uint32_t)rx_rto);
 			}
 			else {
-				int32_t step = (nodelay < 2) ? (int32_t)segment->rto : rx_rto;
-				segment->rto += step / 2;
+				//int32_t step = (nodelay < 2) ? (int32_t)segment->rto : rx_rto;
+				//segment->rto += step / 2;
+				segment->rto += segment->rto / 2;
 			}
 			segment->resendts = current_ + segment->rto;
 			lost = true;
@@ -507,6 +508,9 @@ void Kcp::flush()
 				curr_ptr_ = start_;//reset current_ptr
 			}
 
+			if (segment->xmit > 1) {
+				++resend_cnt;
+			}
 			curr_ptr_ = encode_seg(curr_ptr_, segment);
 
 			if (segment->len > 0) {
@@ -817,9 +821,9 @@ int Kcp::setinterval(int interval_)
 	return 0;
 }
 
-int Kcp::set_nodelay(int nodelay_, int interval_, int resend_, int nc_) {
+int Kcp::set_nodelay(bool nodelay_, int interval_, int resend_, int nc_) {
 
-	if (nodelay_ >= 0) {
+	if (nodelay_) {
 		nodelay = nodelay_;
 		if (nodelay_) {
 			rx_minrto = IKCP_RTO_NDL;

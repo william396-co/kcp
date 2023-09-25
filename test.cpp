@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <memory>
 
 #include "test.h"
 
@@ -61,8 +62,8 @@ void test(int mode)
 	ikcpcb* kcp1 = ikcp_create(0x11223344, (void*)0);
 	ikcpcb* kcp2 = ikcp_create(0x11223344, (void*)1);
 #else
-	Kcp* client = new Kcp(0x11223344, (void*)0);
-	Kcp* server = new Kcp(0x11223344, (void*)1);
+	std::unique_ptr<Kcp> client = std::make_unique<Kcp>(0x11223344, (void*)0);
+	std::unique_ptr<Kcp> server = std::make_unique<Kcp>(0x11223344, (void*)1);
 #endif // !USE_CPP_VERSION	
 
 
@@ -101,8 +102,8 @@ void test(int mode)
 		ikcp_nodelay(kcp1, 0, 10, 0, 0);
 		ikcp_nodelay(kcp2, 0, 10, 0, 0);
 #else
-		client->set_nodelay(0, 10, 0, 0);
-		server->set_nodelay(0, 10, 0, 0);
+		client->set_nodelay(false, 10, 0, 0);
+		server->set_nodelay(false, 10, 0, 0);
 #endif // !USE_CPP_VERSION
 	}
 	else if (mode == 1) {
@@ -111,8 +112,8 @@ void test(int mode)
 		ikcp_nodelay(kcp1, 0, 10, 0, 1);
 		ikcp_nodelay(kcp2, 0, 10, 0, 1);
 #else
-		client->set_nodelay(0, 10, 0, 1);
-		server->set_nodelay(0, 10, 0, 1);
+		client->set_nodelay(false, 10, 0, 1);
+		server->set_nodelay(false, 10, 0, 1);
 #endif // !USE_CPP_VERSION
 	}
 	else {
@@ -127,11 +128,10 @@ void test(int mode)
 		kcp1->rx_minrto = 10;
 		kcp1->fastresend = 1;
 #else
-		client->set_nodelay(2, 10, 2, 1);
-		server->set_nodelay(2, 10, 2, 1);
+		client->set_nodelay(true, 10, 2, 1);
+		server->set_nodelay(true, 10, 2, 1);
 		client->set_rx_minrto(10);
 		client->set_fastresend(1);
-
 #endif // !USE_CPP_VERSION
 	}
 
@@ -242,9 +242,6 @@ void test(int mode)
 #ifndef USE_CPP_VERSION
 	ikcp_release(kcp1);
 	ikcp_release(kcp2);
-#else
-	delete client;
-	delete server;
 #endif // !USE_CPP_VERSION
 
 	const char* names[3] = { "default", "normal", "fast" };
