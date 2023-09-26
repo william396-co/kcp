@@ -10,4 +10,4 @@ client:
 	g++ -std=c++17 -o kcp_client util.cpp ikcp.c kcp_client.cpp udpsocket.cpp client.cpp -lpthread -Wall -g
 
 test:
-	g++ -std=c++17 -o kcp_test test.cpp ikcp.c -Wall -g
+	g++ -std=c++17 -o kcp_test kcpex.cpp test.cpp ikcp.c -Wall -g

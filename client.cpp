@@ -36,7 +36,7 @@ void Client::auto_input()
     auto current = util::now_ms();
     uint32_t auto_send = 0;
     while ( auto_test && auto_send < test_count ) {
-        if ( util::now_ms() - current < 30 )
+        if ( util::now_ms() - current < 20 )
             continue;
         str.clear();
         current = util::now_ms();
@@ -111,7 +111,7 @@ void Client::run()
 
         if ( sn != next ) {
             printf( "ERROR sn %d<->%d\n", count, next );
-            // break;
+            break;
         }
         ++next;
         sumrtt += rtt;
@@ -121,8 +121,8 @@ void Client::run()
         if ( !auto_test )
             printf( "[RECV] sn:%d rrt:%d  content: {%s}\n", sn + 1, rtt, (char *)&buff[8] );
         else
-            printf( "[RECV] sn:%d rrt:%d\n", sn, rtt );
-        //        if ( next >= test_count ) break;
+            printf( "[RECV] sn:%d rrt:%d\n", sn + 1, rtt );
+        if ( next >= test_count ) break;
     }
 
     /* summary */
